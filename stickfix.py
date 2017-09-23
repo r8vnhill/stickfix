@@ -15,31 +15,43 @@ __author__ = "Ignacio Slater Muñoz"
 __email__ = "ignacio.slater@ug.uchile.cl"
 
 
-def on_chosen_inline_result(msg):
+def _on_chosen_inline_result(msg):
+    """
+    Represents a result of an inline query that was chosen by the user and sent
+    to their chat partner.
+    """
     result_id, from_id, query_string = telepot.glance(
         msg, flavor='chosen_inline_result')
     print('Chosen Inline Result:', result_id, from_id, query_string)
 
 
-def is_valid(tag):
+def _is_valid(tag):
+    """
+    Checks if a hashtag is valid.
+
+    :param tag: Tag to check.
+    :return:
+    """
     return re.fullmatch("#[A-Za-z][\w_]*", tag) is not None
 
 
+# noinspection PyUnusedLocal
 class StickerHelperBot:
     """
-    Este bot implementa algunas funcionalidades para usar stickers de telegram.
-    CLIENT class.
+    Base class for @stickfixbot.
+    This class implements functions to help manage and store stickers in
+    telegram using chat commands and inline queries.
     """
 
     def __init__(self, token, admins=None):
         """
-        Define los valores iniciales del bot.
+        Initializes the bot.
 
-        :param token:  TOKEN del bot.
-        :param admins: ID de los usuarios que tienen privilegio de administrador
-                       para el bot. Necesario para manejar elementos internos
-                       del bot, como reestablecer la base de datos y manejar
-                       copias de seguridad.
+        :param token:
+            Bot's TOKEN.
+        :param admins:
+            ID of the users that have administrator privileges, this is needed
+            to manage the database using chat commands.
         """
         self._msg = None
 
@@ -49,56 +61,65 @@ class StickerHelperBot:
         self._bot = telepot.Bot(token)
         self._answerer = InlineHandler(self._bot)
         self._id = self._bot.getMe()['id']
-        # Comandos
+
         self._chat_cmd = {
             "/start": self.greet,
-            "/backup": self.backup_db,
+            "/backup": self._backup_db,
             "/help": self.help,
-            "/tags": self.show_tags,
-            "/resetDB": self.reset_db,
-            "/add": self.add,
-            "/deleteFrom": self.delete_from_tag,
-            "/deleteTags": self.delete_tag,
-            "/get": self.get_all
+            "/tags": self._show_tags,
+            "/resetDB": self._reset_db,
+            "/add": self._add,
+            "/deleteFrom": self._delete_from_tag,
+            "/deleteTags": self._delete_tag,
+            "/get": self._get_all
         }
 
     def run(self):
-        """Corre el bot."""
-        MessageLoop(self._bot, {'chat': self.chat_handle,
-                                'inline_query': self.inline_handle,
-                                'chosen_inline_result': on_chosen_inline_result}
-                    ).run_as_thread()
+        """
+        Starts the bot.
+        """
+        handle = {
+            'chat': self._chat_handle,
+            'inline_query': self.inline_handle,
+            'chosen_inline_result': _on_chosen_inline_result
+        }
+        MessageLoop(self._bot, handle).run_as_thread()
         print('Listening ...')
 
         while True:
             time.sleep(10)
 
-    # Comandos normales
-    def chat_handle(self, msg):
+    def _chat_handle(self, msg):
         """
-        Handle de los mensajes recibidos por chat.
+        Handles the messages received in chat.
 
-        :param msg: Mensaje.
+        :param msg:
+            Message received.
         """
         self._msg = msg
         content_type, chat_type, chat_id = telepot.glance(msg)
         print(content_type, chat_type, chat_id)
-        # Si comienza un chat.
-        if content_type == 'new_chat_member':
+
+        if content_type == 'new_chat_member':  # If the bot joins a chat.
             if msg['new_chat_member']['id'] == self._id:
                 self.greet(chat_id)
-        if not content_type == 'text':  # Ignora los mensajes que no sean texto
+
+        if not content_type == 'text':  # Ignores all non-text messages
             return
-        text = msg['text']
-        self.exec_command(text, chat_id, chat_type)
 
-    def exec_command(self, msg, chat_id, chat_type):
+        txt = msg['text']
+        self._exec_command(txt, chat_id, chat_type)
+
+    def _exec_command(self, msg, chat_id, chat_type):
         """
-        Ejecuta un comando.
+        Executes a command.
 
-        :param msg:       Texto del mensaje.
-        :param chat_id:   ID del chat desde el que se llama al comando.
-        :param chat_type: Tipo del chat desde el que se llama al comando.
+        :param msg:
+            Message.
+        :param chat_id:
+            ID of the chat that sent the message.
+        :param chat_type:
+            Chat type from which the message was sent.
         """
         msg = msg.split(" ")
         cmd = msg[0]
@@ -107,15 +128,18 @@ class StickerHelperBot:
         if cmd in self._chat_cmd:
             self._chat_cmd[cmd](chat_id, chat_type, params)
 
-    def add(self, chat_id, chat_type, params):
+    def _add(self, chat_id, chat_type, params):
         """
-        Asocia un sticker con un tag.
-        Si el tag no existe, se crea; si el sticker ya está relacionado con el
-        tag, se ignora.
+        Links a sticker with a tag.
+        If the tag doesn't exist, it's created; if the sticker is already linked
+        with the tag, it's ignored.
 
-        :param chat_id:   No utilizado.
-        :param chat_type: No utilizado.
-        :param params:    Parámetros que recibe el comando.
+        :param chat_id:
+            Unused.
+        :param chat_type:
+            Unused.
+        :param params:
+            Parameters that are passed to the command.
         """
         try:
             if params is not None:
@@ -131,7 +155,7 @@ class StickerHelperBot:
                     tags = params[i:]
                     sticker = reply['sticker']['file_id']
                     for tag in tags:
-                        if not is_valid(tag):
+                        if not _is_valid(tag):
                             continue
                         result = self._db.add_item(user_id + tag, sticker)
                         if result:
@@ -141,13 +165,16 @@ class StickerHelperBot:
         except KeyError as e:
             print(e)
 
-    def delete_from_tag(self, chat_id, chat_type, params):
+    def _delete_from_tag(self, chat_id, chat_type, params):
         """
-        Elimina un sticker de un tag.
+        Deletes a sticker from a tag.
 
-        :param chat_id:   Id del chat del que se llama al comando.
-        :param chat_type: No utilizado.
-        :param params:    Parámetros que se le entregan al comando.
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param chat_type:
+            Unused.
+        :param params:
+            Parameters that are passed to the command.
         """
         if params is not None:
             user_id = ''
@@ -169,13 +196,16 @@ class StickerHelperBot:
                         "Couldn't find the sticker in " + tag + ".")
                     print(e)
 
-    def delete_tag(self, chat_id, chat_type, params):
+    def _delete_tag(self, chat_id, chat_type, params):
         """
-        Elimina un tag de la base de datos.
+        Deletes a tag from the database.
 
-        :param chat_id:   Id del chat desde el que se llama al comando.
-        :param chat_type: No utilizado.
-        :param params:    Parámetros que se le entregan al comando.
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param chat_type:
+            Unused.
+        :param params:
+            Parameters that are passed to the command.
         """
         if chat_id in self._admins:
             for tag in params:
@@ -191,14 +221,16 @@ class StickerHelperBot:
                 chat_id,
                 "You have no power over me. Please contact an admin.")
 
-    def get_all(self, chat_id, chat_type, params):
+    def _get_all(self, chat_id, chat_type, params):
         """
-        Envía todos los stickers que pertenezcan a los tags especificados.
+        Send the stickers that match with the selected tags.
 
         :param chat_id:
+            ID of the chat from which the command was called.
         :param chat_type:
+            Chat type from which the message was sent.
         :param params:
-        :return:
+            Parameters that are passed to the command.
         """
         if chat_type == 'private' and params is not None:
             i = 1 if params[0] == 'p' else 0
@@ -210,14 +242,16 @@ class StickerHelperBot:
             for item in stickers:
                 self._bot.sendSticker(chat_id, item)
 
-    def show_tags(self, chat_id, chat_type, params):
+    def _show_tags(self, chat_id, chat_type, params):
         """
-        Envía un mensaje conteniendo todos los tags almacenados.
+        Sends a message containing all the stored tags.
 
-        :param chat_id:   Id del chat desde el que se llama al comando.
-        :param params:    Parámetros que recibe el comando. 'p' indica que se
-                          mostrarán los tags personales.
-        :param chat_type: No utilizado.
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param params:
+            Parameters that are passed to the command.
+        :param chat_type:
+            Unused.
         """
         ignore_params = False
         tags = []
@@ -231,7 +265,7 @@ class StickerHelperBot:
                 ignore_params = True
         if params is None or ignore_params:
             for tag in self._db.get_keys():
-                if is_valid(tag):
+                if _is_valid(tag):
                     tags.append(
                         tag + " (" + str(len(self._db.get_item(tag))) + ")")
 
@@ -243,18 +277,20 @@ class StickerHelperBot:
         message = '\n'.join(tags)
         self._bot.sendMessage(chat_id, message)
 
-    def reset_db(self, chat_id, chat_type=None, params=None):
+    def _reset_db(self, chat_id, chat_type=None, params=None):
         """
-        Reestablece la base de datos completa.
-        Para llamar a este comando, se deben tener privilegios de administrador.
+        Resets the database.
 
-        :param params:    No utilizado.
-        :param chat_type: No utilizado.
-        :param chat_id:   ID del usuario que invoca el comando.
+        :param params:
+            Unused.
+        :param chat_type:
+            Unused.
+        :param chat_id:
+            ID of the chat from which the command was called.
         """
         if chat_id in self._admins:
             self._bot.sendMessage(chat_id, "Wait a moment...")
-            self.backup_db(chat_id)
+            self._backup_db(chat_id)
             self._db.reset()
             self._bot.sendMessage(chat_id, "Database emptied.")
         else:
@@ -262,13 +298,16 @@ class StickerHelperBot:
                 chat_id,
                 "You have no power over me. Please contact an admin.")
 
-    def backup_db(self, chat_id, chat_type=None, params=None):
+    def _backup_db(self, chat_id, chat_type=None, params=None):
         """
-        Envía una copia de seguridad de la base de datos.
+        Sends a message with a backup of the database.
 
-        :param chat_id:   ID del chat desde el que se llama al comando.
-        :param chat_type: No utilizado.
-        :param params:    No utilizado.
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param chat_type:
+            Unused.
+        :param params:
+            Unused.
         """
         if chat_id in self._admins:
             db = open("stickerDB.bak")
@@ -277,12 +316,23 @@ class StickerHelperBot:
             for admin in self._admins:
                 self._bot.sendDocument(admin, db, date)
 
-    # Inline
     def inline_handle(self, msg):
+        """
+        Handles the messages received via inline.
+
+        :param msg:
+            Message received.
+        """
         self._msg = msg
         self._answerer.answer(msg, self.compute)
 
     def compute(self):
+        """
+        Computes the inline query and returns the result.
+
+        :return:
+            List of stickers to be shown to the user.
+        """
         stickers = []
         query_id, from_id, query_string = telepot.glance(self._msg,
                                                          flavor='inline_query')
@@ -292,10 +342,10 @@ class StickerHelperBot:
         i = 0
         is_personal, is_random = False, False
         if len(cmd) > 1:
-            if (cmd[0] == 'p' or cmd[1] == 'p') and not is_valid(cmd[0]):
+            if (cmd[0] == 'p' or cmd[1] == 'p') and not _is_valid(cmd[0]):
                 is_personal = True
                 i += 1
-            if (cmd[0] == 'r' or cmd[1] == 'r') and not is_valid(cmd[0]):
+            if (cmd[0] == 'r' or cmd[1] == 'r') and not _is_valid(cmd[0]):
                 is_random = True
                 i += 1
         items = self.get_stickers(from_id, cmd[i:], is_personal, is_random)
@@ -313,6 +363,20 @@ class StickerHelperBot:
 
     # Helper methods
     def get_stickers(self, user_id, tags, is_personal=False, is_random=False):
+        """
+        Get all the stickers that match with the specified tags.
+
+        :param user_id:
+            ID of the user that's calling the command.
+        :param tags:
+            List of tags that that are going to be searched for.
+        :param is_personal:
+            Indicates if the stickers are part of a personal collection.
+        :param is_random:
+            Indicates if the method should pick a random sticker from the tags.
+        :return:
+            List of the stickers that match the selected tags.
+        """
         stickers = []
         if is_personal:
             for tag in tags:
@@ -334,39 +398,59 @@ class StickerHelperBot:
 
     def greet(self, chat_id, chat_type=None, params=None):
         """
-        Envía un saludo.
+        Greets the user.
 
-        :param chat_id:   ID del chat.
-        :param chat_type: No utilizado.
-        :param params:    No utilizado.
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param chat_type:
+            Unused.
+        :param params:
+            Unused.
         """
-        self._bot.sendSticker(
-            chat_id,
-            'CAADBAADTAADqAABTgXzVqN6dJUIXwI')  # file_id del fogs helo
+        self._bot.sendSticker(chat_id, 'CAADBAADTAADqAABTgXzVqN6dJUIXwI')
         self._bot.sendMessage(chat_id, "Can I /help you?")
 
     def help(self, chat_id, chat_type=None, params=None):
+        """
+        Sends a message with help to the user.
+
+        :param chat_id:
+            ID of the chat from which the command was called.
+        :param chat_type:
+            Unused.
+        :param params:
+            Unused.
+        """
         self._bot.sendMessage(
             chat_id,
             "Yo! I'm StickFix, I can link keywords with stickers so you can "
-            'manage them more easily.\n'
+            'manage them more easily. '
+            'By default, all tags are global (everyone can access them), but '
+            'you can also create your own _personal collection_ of tags.\n'
 
             'You can control me by sending me these commands:\n'
-            '/tags - _Sends a message with all the tags that have stickers_\n'
-            '/add <tag> - _Links a sticker with a tag, where <tag> is a '
+            '/tags \[p] - _Sends a message with all the tags that have '
+            'stickers_\n'
+            '/add \[p] <tag> - _Links a sticker with a tag, where <tag> is a '
             'hashtag. For this to work you have to reply to a message that '
             'contains a sticker with the command; I need access to the '
             'messages to do this._\n'
-            '/pickRandom <tag> - _Sends a random sticker tagged with <tag>._\n'
-            '/deleteFrom <tag> - _Works like /add, it unlinks a sticker from '
-            'a tag._\n'
+            '/deleteFrom \[p] <tag> - _Works like /add, it deletes a sticker '
+            'from a tag._\n'
             '\n'
             '*In private:*\n'
-            '/get <tag> - _Sends all stickers tagged with <tag>._\n'
+            '/get \[p] <tag> - _Sends all stickers tagged with <tag>._\n'
+            'Where \[p] is an optional parameter that indicates if the sticker '
+            'is going to be added to (or retrieved from) a personal collection.'
+            ' For example, if you send me `/add p #tag` I will store the '
+            'sticker you signaled me to your personal collection.\n'
             '\n'
-            'You can also call me inline like `@stickfixbot #tag` to see a '
-            'list of all the stickers you have tagged with #tag.',
-            parse_mode="Markdown")
+            'You can also call me inline like `@stickfixbot [p] [r] #tag` to '
+            'see a list of all the stickers you have tagged with #tag, where '
+            '\[p] is the same as before, and \[r] indicates that you want to '
+            'get a random sticker from the #tag, both parameters are optional.',
+            parse_mode="Markdown"
+        )
 
 
 class InlineHandler(Answerer):
