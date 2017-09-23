@@ -41,7 +41,8 @@ class ShelveDB:
             try:
                 return db[key]
             except KeyError as e:
-                print(e)
+                # print(e)
+                return []
 
     def reset(self):
         with shelve.open(self._name) as db:
