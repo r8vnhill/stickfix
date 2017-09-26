@@ -310,11 +310,14 @@ class StickerHelperBot:
             Unused.
         """
         if chat_id in self._admins:
-            db = open("stickerDB.bak")
-            from datetime import datetime
-            date = datetime.now().strftime("%c")
-            for admin in self._admins:
-                self._bot.sendDocument(admin, db, date)
+            import os
+            files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
+            for file in files:
+                with open(file) as db:
+                    from datetime import datetime
+                    date = datetime.now().strftime("%c")
+                    for admin in self._admins:
+                        self._bot.sendDocument(admin, db, date)
 
     def inline_handle(self, msg):
         """
