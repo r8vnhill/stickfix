@@ -4,6 +4,7 @@ import re
 import threading
 import time
 
+import schedule
 import telepot
 from telepot.helper import Answerer
 from telepot.loop import MessageLoop
@@ -84,10 +85,12 @@ class StickerHelperBot:
             'inline_query': self.inline_handle,
             'chosen_inline_result': _on_chosen_inline_result
         }
+        schedule.every().day.at("00:00").do(self.scheduled_backup)
         MessageLoop(self._bot, handle).run_as_thread()
         print('Listening ...')
 
         while True:
+            schedule.run_pending()
             time.sleep(10)
 
     def _chat_handle(self, msg):
@@ -299,6 +302,19 @@ class StickerHelperBot:
                 chat_id,
                 "You have no power over me. Please contact an admin.")
 
+    def scheduled_backup(self):
+        """
+        Backups the database and sends it to a private channel.
+        """
+        import os
+        self._bot.sendMessage(-1001132704993, "*BACKUP*", parse_mode="Markdown")
+        files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
+        for file in files:
+            with open(file) as db:
+                from datetime import datetime
+                date = datetime.now().strftime("%c")
+                self._bot.sendDocument(-1001132704993, db, date)
+        
     def _backup_db(self, chat_id, chat_type=None, params=None):
         """
         Sends a message with a backup of the database.
@@ -311,21 +327,14 @@ class StickerHelperBot:
             Unused.
         """
         if chat_id in self._admins:
-            import os
-            self._bot.sendMessage(chat_id, "Wait a moment...")
             with open("stickerDB.json", 'w') as fp:
                 db = self._db.get_db()
                 if params is not None:
                     if params[0] == 't':
                         self._bot.sendMessage(chat_id, db)
                 fp.write(db)
-            files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
-            for file in files:
-                with open(file) as db:
-                    from datetime import datetime
-                    date = datetime.now().strftime("%c")
-                    for admin in self._admins:
-                        self._bot.sendDocument(admin, db, date)
+            self._bot.sendMessage(chat_id, "Wait a moment...")
+            self.scheduled_backup()
             self._bot.sendMessage(chat_id, "Successfully created backup.")
 
     def _restore(self, chat_id, chat_type=None, params=None):
