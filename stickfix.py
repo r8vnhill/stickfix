@@ -312,8 +312,13 @@ class StickerHelperBot:
         """
         if chat_id in self._admins:
             import os
+            self._bot.sendMessage(chat_id, "Wait a moment...")
             with open("stickerDB.json", 'w') as fp:
-                fp.write(self._db.get_db())
+                db = self._db.get_db()
+                if params is not None:
+                    if params[0] == 't':
+                        self._bot.sendMessage(chat_id, db)
+                fp.write(db)
             files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
             for file in files:
                 with open(file) as db:
@@ -321,6 +326,7 @@ class StickerHelperBot:
                     date = datetime.now().strftime("%c")
                     for admin in self._admins:
                         self._bot.sendDocument(admin, db, date)
+            self._bot.sendMessage(chat_id, "Successfully created backup.")
 
     def _restore(self, chat_id, chat_type=None, params=None):
         """
