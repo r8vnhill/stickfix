@@ -333,7 +333,12 @@ class StickerHelperBot:
         """
         if chat_id in self._admins:
             self._bot.sendMessage(chat_id, "Wait a moment...")
-            self._db.update("stickerDB.json")
+            # noinspection PyBroadException
+            try:
+                reply = self._msg['reply_to_message']['text']
+                self._db.update_from_string(reply)
+            except Exception:
+                self._db.update_from_file("stickerDB.json")
             self._bot.sendMessage(chat_id, "Database was restored to the last backup.")
 
     def inline_handle(self, msg):

@@ -101,7 +101,7 @@ class ShelveDB:
         d += "}"
         return d
 
-    def update(self, file):
+    def update_from_file(self, file):
         """
         Updates the shelve with a dictionary.
         
@@ -111,5 +111,17 @@ class ShelveDB:
         with shelve.open(self._name) as db:
             with open(file, 'r') as fp:
                 data = json.load(fp)
+            for key in data.keys():
+                db[key] = data[key]
+
+    def update_from_string(self, text):
+        """
+        Updates the shelve with a dictionary.
+        
+        :param text:
+            Dictionary stored in a JSON string.
+        """
+        with shelve.open(self._name) as db:
+            data = json.loads(text)
             for key in data.keys():
                 db[key] = data[key]
