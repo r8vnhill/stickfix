@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 import shelve
 
 __author__ = "Ignacio Slater Muñoz"
@@ -81,3 +82,34 @@ class ShelveDB:
                     del db[key]
             else:
                 raise KeyError
+
+    def get_db(self):
+        """
+        Gets the db as a string.
+        
+        :return: A string representation of the database following the format of a JSON file.
+        """
+        d = "{\n"
+        i = 0
+        with shelve.open(self._name) as db:
+            for key in db.keys():
+                d += '  "' + key + '"' + ": " + json.dumps(db[key])
+                if i < len(db.keys()) - 1:
+                    d += ","
+                d += "\n"
+                i += 1
+        d += "}"
+        return d
+
+    def update(self, file):
+        """
+        Updates the shelve with a dictionary.
+        
+        :param file:
+            Dictionary stored in a JSON file.
+        """
+        with shelve.open(self._name) as db:
+            with open(file, 'r') as fp:
+                data = json.load(fp)
+            for key in data.keys():
+                db[key] = data[key]

@@ -71,7 +71,8 @@ class StickerHelperBot:
             "/add": self._add,
             "/deleteFrom": self._delete_from_tag,
             "/deleteTags": self._delete_tag,
-            "/get": self._get_all
+            "/get": self._get_all,
+            "/restore": self._restore
         }
 
     def run(self):
@@ -311,6 +312,8 @@ class StickerHelperBot:
         """
         if chat_id in self._admins:
             import os
+            with open("stickerDB.json", 'w') as fp:
+                fp.write(self._db.get_db())
             files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
             for file in files:
                 with open(file) as db:
@@ -318,6 +321,20 @@ class StickerHelperBot:
                     date = datetime.now().strftime("%c")
                     for admin in self._admins:
                         self._bot.sendDocument(admin, db, date)
+
+    def _restore(self, chat_id, chat_type=None, params=None):
+        """
+        Restores the database to the last backup.
+        
+        :param chat_id:
+        :param chat_type:
+        :param params:
+        :return:
+        """
+        if chat_id in self._admins:
+            self._bot.sendMessage(chat_id, "Wait a moment...")
+            self._db.update("stickerDB.json")
+            self._bot.sendMessage(chat_id, "Database was restored to the last backup.")
 
     def inline_handle(self, msg):
         """
