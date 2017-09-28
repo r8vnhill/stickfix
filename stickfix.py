@@ -85,7 +85,7 @@ class StickerHelperBot:
             'inline_query': self.inline_handle,
             'chosen_inline_result': _on_chosen_inline_result
         }
-        schedule.every().day.at("00:00").do(self.scheduled_backup)
+        schedule.every().day.at("00:01").do(self.scheduled_backup)
         MessageLoop(self._bot, handle).run_as_thread()
         print('Listening ...')
 
@@ -306,15 +306,19 @@ class StickerHelperBot:
         """
         Backups the database and sends it to a private channel.
         """
-        import os
-        self._bot.sendMessage(-1001132704993, "*BACKUP*", parse_mode="Markdown")
-        files = [f for f in os.listdir('.') if os.path.isfile(f) and f.startswith("stickerDB")]
-        for file in files:
-            with open(file) as db:
-                from datetime import datetime
-                date = datetime.now().strftime("%c")
+        from datetime import datetime
+        try:
+            with open("stickerDB.json", 'w') as fp:
+                db = self._db.get_db()
+                fp.write(db)
+            self._bot.sendMessage(-1001132704993, "*BACKUP*", parse_mode="Markdown")
+            date = datetime.now().strftime("%c")
+            with open("stickerDB.json", "r") as db:
                 self._bot.sendDocument(-1001132704993, db, date)
-        
+        except Exception as e:
+            self._bot.sendMessage(-1001132704993, "An error ocurred while creating the backup.")
+            print(e)
+    
     def _backup_db(self, chat_id, chat_type=None, params=None):
         """
         Sends a message with a backup of the database.
@@ -327,12 +331,6 @@ class StickerHelperBot:
             Unused.
         """
         if chat_id in self._admins:
-            with open("stickerDB.json", 'w') as fp:
-                db = self._db.get_db()
-                if params is not None:
-                    if params[0] == 't':
-                        self._bot.sendMessage(chat_id, db)
-                fp.write(db)
             self._bot.sendMessage(chat_id, "Wait a moment...")
             self.scheduled_backup()
             self._bot.sendMessage(chat_id, "Successfully created backup.")
