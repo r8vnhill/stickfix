@@ -4,16 +4,17 @@
 """
 
 import logging
+from uuid import uuid4
 
-from telegram import ParseMode
+from telegram import InlineQueryResultCachedSticker, ParseMode
 from telegram.error import BadRequest, ChatMigrated, NetworkError, TelegramError, TimedOut, Unauthorized
-from telegram.ext import CommandHandler, Updater
+from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryHandler, Updater
 
 from sf_database import ShelveDB
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.1.2"
+__version__ = "1.2"
 
 
 class StickfixBot:
@@ -32,6 +33,7 @@ class StickfixBot:
         """
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
         self._user_db = ShelveDB("stickfix-user-DB")
+        self._cached_stickers_lists = {}  # Guarda los stickers pedidos por los usuarios
         self._logger = logging.getLogger(__name__)
         self._updater = Updater(token)
         self._dispatcher = self._updater.dispatcher
@@ -42,8 +44,9 @@ class StickfixBot:
         self._dispatcher.add_handler(CommandHandler("setMode", self._set_mode, pass_args=True))
         self._dispatcher.add_handler(CommandHandler("add", self._add, pass_args=True))
         self._dispatcher.add_handler(CommandHandler('get', self._get_all, pass_args=True))
-        # TODO -cFeature -v1.2 : Implementar inline query para enviar stickers -Ignacio.
-        # TODO -cFeature -v1.3 : Implementar comandos para manejar la BDD -Ignacio.
+        self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
+        self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
+        # TODO -cFeature -v1.4 : Implementar comandos para manejar la BDD -Ignacio.
         # TODO -cFeature -v2.1: Implementar comando addSet.
         # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
 
@@ -63,6 +66,11 @@ class StickfixBot:
         :param args:
             Tags that identify the pack to which the stickers are going to be added.
         """
+        # Se debe crear el usuario SF-PUBLIC si no existe.
+        if 'SF-PUBLIC' not in self._user_db:
+            self._create_user('SF-PUBLIC')
+            self._logger.info('Created SF-PUBLIC user.')
+        
         tg_reply_to = update.effective_message.reply_to_message
         tg_msg = update.message
         tg_user = update.effective_user
@@ -82,17 +90,12 @@ class StickfixBot:
                 else:
                     tags = args
 
-                if tg_user_id not in self._user_db:  # Si el usuario no está en la BDD se toma como GUEST.
-                    tg_user_id = 'GUEST'
-                if 'GUEST' not in self._user_db:  # Se crea el usuario GUEST si no existe.
-                    self._create_user('GUEST')
-                    self._logger.info('Created GUEST user.')
+                tg_username = tg_user.username
+                sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
 
-                if self._user_db.get_item(tg_user_id).mode == StickfixUser.ON:
-                    sf_user = self._user_db.get_item(tg_user_id)
-                    tg_username = tg_user.username
-                else:
-                    sf_user = self._user_db.get_item('GUEST')
+                if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
+                    # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
+                    sf_user = self._user_db.get_item('SF-PUBLIC')
                     tg_username = 'stickfix-public'
 
                 sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
@@ -119,25 +122,16 @@ class StickfixBot:
         """
         tg_msg = update.message
         tg_chat = update.effective_chat
+        tg_user_id = str(update.effective_user.id)
         if tg_chat.type != 'private':
             tg_msg.reply_text("Sorry, this command only works in private chats.")
         elif len(args) == 0:
             tg_msg.reply_text("You need to give me at least 1 tag to search for stickers.")
         else:
-            # Hay que pensar si hay alguna manera menos redundante de implementar esto -Ignacio.
-            tg_user_id = str(update.effective_user.id)
-            if tg_user_id not in self._user_db:
-                tg_user_id = 'GUEST'
-            sf_user = self._user_db.get_item(tg_user_id)
-
-            stickers = []
-            for tag in args:
-                match = set()
-                if sf_user.mode == StickfixUser.OFF:
-                    match = self._user_db.get_item('GUEST').get_stickers(sticker_tag=tag)
-                stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
-            sticker_list = list(set.intersection(*stickers))
-
+            sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
+                else self._user_db.get_item('SF-PUBLIC')
+    
+            sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
             for file_id in sticker_list:
                 bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
         self._logger.info("Sent stickers tagged with " + ", ".join(args) + " to %s.", update.effective_user.username)
@@ -197,10 +191,10 @@ class StickfixBot:
 
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'PRIVATE':
-                user.mode = StickfixUser.ON
+                user.private_mode = StickfixUser.ON
                 self._logger.info("User %s changed to private mode", tg_user.username)
             elif args[0].upper() == 'PUBLIC':
-                user.mode = StickfixUser.OFF
+                user.private_mode = StickfixUser.OFF
                 self._logger.info("User %s changed to public mode", tg_user.username)
             else:
                 update.message.reply_text("Sorry, I didn't understand. Send `/setMode private` or `/setMode public`.",
@@ -221,6 +215,53 @@ class StickfixBot:
 
     # endregion
 
+    # region Inline queries
+    def _inline_get(self, bot, update):
+        tg_inline = update.inline_query
+        tg_query = tg_inline.query
+        tg_user_id = str(update.effective_user.id)
+        sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
+            else self._user_db.get_item('SF-PUBLIC')
+    
+        offset = 0 if not tg_inline.offset else int(tg_inline.offset)
+    
+        if not tg_query:
+            # Sería bueno que mostrara stickers si no se entrega ningún mensaje -Ignacio.
+            return
+        tags = tg_query.split(" ")
+    
+        if offset == 0:
+            sf_user.remove_cached_stickers(tg_user_id)
+        sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id)
+        results = []
+    
+        upper_bound = min(len(sticker_list), offset + 50)
+        for i in range(offset, upper_bound):
+            results.append(InlineQueryResultCachedSticker(id=uuid4(), sticker_file_id=sticker_list[i]))
+    
+        bot.answer_inline_query(tg_inline.id, results, cache_time=1, is_personal=True, next_offset=str(offset + 50))
+        self._user_db.add_item(sf_user.id, sf_user)
+
+    def _on_inline_result(self, bot, update):
+        tg_user_id = str(update.effective_user.id)
+        sf_user = self._user_db.get_item(tg_user_id)
+        sf_user.remove_cached_stickers(tg_user_id)
+        self._user_db.add_item(sf_user.id, sf_user)
+        self._logger.info("Answered inline query for %s.", update.chosen_inline_result.query)
+
+    # endregion
+
+    def _create_guest(self, user_id):
+        """
+        Creates a temporary `StickfixUser` and adds it to the database.
+
+        :param user_id:
+            ID of the user to be created.
+        """
+        user = StickfixUser(user_id)
+        self._user_db.add_item(user_id, user)
+        return user
+    
     def _create_user(self, user_id):
         """
         Creates a new `StickfixUser` and adds it to the database.
@@ -230,7 +271,8 @@ class StickfixBot:
         """
         user = StickfixUser(user_id)
         self._user_db.add_item(user_id, user)
-
+        return user
+    
     def _error_callback(self, bot, update, error):
         """Log errors."""
         try:
@@ -247,3 +289,25 @@ class StickfixBot:
             self._logger.error(e.message)
         except TelegramError as e:
             self._logger.error(e.message)
+
+    def _get_sticker_list(self, sf_user, tags, user_id):
+        """
+        Gets all the stickers from a user that mathces the given tags.
+        
+        :return:
+            A list containing all the stickers that matches the tags.
+        """
+        # Hay que pensar si hay alguna manera menos redundante de implementar esto -Ignacio.
+        str_tags = '-'.join(tags)
+        if str_tags in sf_user.cached_stickers:
+            return sf_user.cached_stickers[user_id][str_tags]
+        stickers = []
+        for tag in tags:
+            match = set()
+            if sf_user.private_mode == StickfixUser.OFF:
+                match = self._user_db.get_item('SF-PUBLIC').get_stickers(sticker_tag=tag)
+            stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
+        # TODO -cFeature -v1.3 : Agregar shuffle -Ignacio.
+        sticker_list = list(set.intersection(*stickers))
+        sf_user.cached_stickers[user_id] = {str_tags: sticker_list}
+        return sticker_list

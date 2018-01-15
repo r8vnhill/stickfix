@@ -7,7 +7,7 @@ import json
 import shelve
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.1.2"
+__version__ = "1.2"
 
 
 class ShelveDB:

@@ -4,15 +4,23 @@
 """
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.1.2"
+__version__ = "1.2"
 
 
 class StickfixUser:
-    OFF, ON = range(2)
+    OFF = False
+    ON = True
     
     def __init__(self, user_id):
+        """
+        Creates a StickfixBot user with default values.
+        
+        :param user_id:
+            ID of the user.
+        """
         self.id = user_id
         self.stickers = dict()
+        self.cached_stickers = {}
         self.private_mode = self.OFF
     
     def add_sticker(self, sticker_id, sticker_tags):
@@ -48,3 +56,13 @@ class StickfixUser:
         if sticker_tag in self.stickers:
             return set(self.stickers[sticker_tag])
         return set()
+    
+    def remove_cached_stickers(self, user_id=None):
+        """
+        Removes the cached stickers for the user.
+        
+        :param user_id:
+            Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for other users.
+        """
+        if user_id in self.cached_stickers:
+            del self.cached_stickers[user_id]
