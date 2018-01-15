@@ -1,15 +1,19 @@
-__author__ = "Ignacio Slater Muñoz"
-__email__ = "ignacio.slater@ug.uchile.cl"
-__version__ = "1.1.1"
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+"""
+
+__author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
+__version__ = "1.1.2"
 
 
 class StickfixUser:
-    PUBLIC, PRIVATE = range(2)
+    OFF, ON = range(2)
     
     def __init__(self, user_id):
         self.id = user_id
         self.stickers = dict()
-        self.mode = self.PUBLIC
+        self.private_mode = self.OFF
     
     def add_sticker(self, sticker_id, sticker_tags):
         """

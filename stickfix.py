@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Bot that helps storing and sending stickers in telegram.
+"""
+
 import logging
+
 from telegram import ParseMode
 from telegram.error import BadRequest, ChatMigrated, NetworkError, TelegramError, TimedOut, Unauthorized
 from telegram.ext import CommandHandler, Updater
 
+from sf_database import ShelveDB
 from sf_user import StickfixUser
-from shelve_db import ShelveDB
 
-__author__ = "Ignacio Slater Muñoz"
-__email__ = "ignacio.slater@ug.uchile.cl"
-__version__ = "1.1.1"
+__author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
+__version__ = "1.1.2"
 
 
 class StickfixBot:
@@ -52,33 +55,6 @@ class StickfixBot:
         """
         self._updater.start_polling()
 
-    def _create_user(self, user_id):
-        """
-        Creates a new `StickfixUser` and adds it to the database.
-        
-        :param user_id:
-            ID of the user to be created.
-        """
-        user = StickfixUser(user_id)
-        self._user_db.add_item(user_id, user)
-
-    def _error_callback(self, bot, update, error):
-        """Log errors."""
-        try:
-            raise error
-        except Unauthorized as e:
-            self._logger.error(e.message)
-        except BadRequest as e:
-            self._logger.error(e.message)
-        except TimedOut as e:
-            self._logger.error(e.message)
-        except NetworkError as e:
-            self._logger.error(e.message)
-        except ChatMigrated as e:
-            self._logger.error(e.message)
-        except TelegramError as e:
-            self._logger.error(e.message)
-
     # region Chat commands
     def _add(self, bot, update, args):
         """
@@ -105,20 +81,20 @@ class StickfixBot:
                     tags = [tg_sticker.emoji]
                 else:
                     tags = args
-            
+
                 if tg_user_id not in self._user_db:  # Si el usuario no está en la BDD se toma como GUEST.
                     tg_user_id = 'GUEST'
                 if 'GUEST' not in self._user_db:  # Se crea el usuario GUEST si no existe.
                     self._create_user('GUEST')
                     self._logger.info('Created GUEST user.')
-            
-                if self._user_db.get_item(tg_user_id).mode == StickfixUser.PRIVATE:
+
+                if self._user_db.get_item(tg_user_id).mode == StickfixUser.ON:
                     sf_user = self._user_db.get_item(tg_user_id)
                     tg_username = tg_user.username
                 else:
                     sf_user = self._user_db.get_item('GUEST')
                     tg_username = 'stickfix-public'
-            
+
                 sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
                 self._user_db.add_item(sf_user.id, sf_user)
                 self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
@@ -153,15 +129,15 @@ class StickfixBot:
             if tg_user_id not in self._user_db:
                 tg_user_id = 'GUEST'
             sf_user = self._user_db.get_item(tg_user_id)
-    
+
             stickers = []
             for tag in args:
                 match = set()
-                if sf_user.mode == StickfixUser.PUBLIC:
+                if sf_user.mode == StickfixUser.OFF:
                     match = self._user_db.get_item('GUEST').get_stickers(sticker_tag=tag)
                 stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
             sticker_list = list(set.intersection(*stickers))
-    
+
             for file_id in sticker_list:
                 bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
         self._logger.info("Sent stickers tagged with " + ", ".join(args) + " to %s.", update.effective_user.username)
@@ -218,14 +194,18 @@ class StickfixBot:
             if tg_user_id not in self._user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
-    
+
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'PRIVATE':
-                user.mode = StickfixUser.PRIVATE
+                user.mode = StickfixUser.ON
                 self._logger.info("User %s changed to private mode", tg_user.username)
             elif args[0].upper() == 'PUBLIC':
-                user.mode = StickfixUser.PUBLIC
+                user.mode = StickfixUser.OFF
                 self._logger.info("User %s changed to public mode", tg_user.username)
+            else:
+                update.message.reply_text("Sorry, I didn't understand. Send `/setMode private` or `/setMode public`.",
+                                          parse_mode=ParseMode.MARKDOWN)
+                return
             self._user_db.add_item(user.id, user)
             update.message.reply_text("Ok.")
 
@@ -238,4 +218,32 @@ class StickfixBot:
             # TODO -cFeature -v2.1 : Se debería preguntar al usuario si desea ser añadido a la BDD -Ignacio.
             self._logger.info("User %s was added to the database", tg_user.username)
             self._create_user(tg_user_id)
+
     # endregion
+
+    def _create_user(self, user_id):
+        """
+        Creates a new `StickfixUser` and adds it to the database.
+
+        :param user_id:
+            ID of the user to be created.
+        """
+        user = StickfixUser(user_id)
+        self._user_db.add_item(user_id, user)
+
+    def _error_callback(self, bot, update, error):
+        """Log errors."""
+        try:
+            raise error
+        except Unauthorized as e:
+            self._logger.error(e.message)
+        except BadRequest as e:
+            self._logger.error(e.message)
+        except TimedOut as e:
+            self._logger.error(e.message)
+        except NetworkError as e:
+            self._logger.error(e.message)
+        except ChatMigrated as e:
+            self._logger.error(e.message)
+        except TelegramError as e:
+            self._logger.error(e.message)
