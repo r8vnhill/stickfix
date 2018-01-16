@@ -5,6 +5,7 @@
 
 import logging
 import random
+from shutil import copyfile
 from uuid import uuid4
 
 from telegram import InlineQueryResultCachedSticker, ParseMode
@@ -15,8 +16,13 @@ from sf_database import ShelveDB
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.3"
+__version__ = "1.4.1"
 
+
+# TODO -cFeature -v1.4.1 : Se podría usar una job queue para comprobar la bdd periodicamente -Ignacio.
+# TODO -cFeature -v1.4.2 : Hay que implementar el comando `/restore` para restaurar la bdd a un punto anterior -Ignacio.
+# TODO -cFeature -v2.1: Implementar comando `/addSet`.
+# Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
 
 class StickfixBot:
     """
@@ -25,20 +31,28 @@ class StickfixBot:
     telegram using chat commands and inline queries.
     """
 
-    def __init__(self, token):
+    def __init__(self, token, admins):
         """
         Initializes the bot.
 
         :param token:
             Bot's TOKEN.
+        :param admins:
+            List containing the id's of the users with admin privilege.
         """
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+        self.admins = admins
+        self._backup_id = 0
         self._user_db = ShelveDB("stickfix-user-DB")
-        self._cached_stickers_lists = {}  # Guarda los stickers pedidos por los usuarios
         self._logger = logging.getLogger(__name__)
+
         self._updater = Updater(token)
         self._dispatcher = self._updater.dispatcher
 
+        self._job_queue = self._updater.job_queue
+        self._job_queue.run_repeating(self._periodic_backup, interval=(12 * 60 * 60), first=0)
+
+        # region Handlers
         self._dispatcher.add_handler(CommandHandler("start", self._start))
         self._dispatcher.add_handler(CommandHandler("help", self._help))
         self._dispatcher.add_handler(CommandHandler("deleteMe", self._delete_user))
@@ -46,12 +60,10 @@ class StickfixBot:
         self._dispatcher.add_handler(CommandHandler("add", self._add, pass_args=True))
         self._dispatcher.add_handler(CommandHandler('get', self._get_all, pass_args=True))
         self._dispatcher.add_handler(CommandHandler("shuffle", self._set_shuffle, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("deleteFrom", self._delete_from, pass_args=True))
         self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
-        # TODO -cFeature -v1.4 : Implementar comandos para manejar la BDD -Ignacio.
-        # TODO -cFeature -v2.1: Implementar comando addSet.
-        # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
-
+        # endregion
         self._dispatcher.add_error_handler(self._error_callback)  # Para logging de errores.
 
     def run(self):
@@ -104,6 +116,10 @@ class StickfixBot:
                 self._user_db.add_item(sf_user.id, sf_user)
                 self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
 
+    def _delete_from(self, bot, update, args):
+        """"""
+        pass
+    
     def _delete_user(self, bot, update):
         """Deletes the user who sent the command from the database."""
         tg_user = update.effective_user
@@ -224,7 +240,7 @@ class StickfixBot:
             if tg_user_id not in self._user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
-        
+
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'ON':
                 user.shuffle = StickfixUser.ON
@@ -259,23 +275,23 @@ class StickfixBot:
         tg_user_id = str(update.effective_user.id)
         sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
             else self._user_db.get_item('SF-PUBLIC')
-    
+
         offset = 0 if not tg_inline.offset else int(tg_inline.offset)
-    
+
         if not tg_query:
             # Sería bueno que mostrara stickers si no se entrega ningún mensaje -Ignacio.
             return
         tags = tg_query.split(" ")
-    
+
         if offset == 0:
             sf_user.remove_cached_stickers(tg_user_id)
         sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user.shuffle)
         results = []
-    
+
         upper_bound = min(len(sticker_list), offset + 50)
         for i in range(offset, upper_bound):
             results.append(InlineQueryResultCachedSticker(id=uuid4(), sticker_file_id=sticker_list[i]))
-    
+
         bot.answer_inline_query(tg_inline.id, results, cache_time=1, is_personal=True, next_offset=str(offset + 50))
         self._user_db.add_item(sf_user.id, sf_user)
 
@@ -287,6 +303,18 @@ class StickfixBot:
         self._logger.info("Answered inline query for %s.", update.chosen_inline_result.query)
 
     # endregion
+
+    def _periodic_backup(self, bot, job):
+        """Creates a backup of the database periodically."""
+        try:
+            copyfile("stickfix-user-DB.dat", "stickfix-user-DB-bk" + str(self._backup_id) + ".dat")
+            copyfile("stickfix-user-DB.dir", "stickfix-user-DB-bk" + str(self._backup_id) + ".dir")
+            self._logger.info("Created backup file stickfix-user-DB-bk" + str(self._backup_id))
+            self._backup_id = (self._backup_id + 1) % 3
+        except OSError as e:
+            self._logger.error(e.strerror)
+        except Exception as e:
+            self._logger.error(e.__cause__)
     
     def _create_user(self, user_id):
         """
