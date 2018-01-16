@@ -16,10 +16,9 @@ from sf_database import ShelveDB
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.4.2"
+__version__ = "1.4.3"
 
 
-# TODO -cFeature -v1.4.3 : Falta un comando para borrar stickers de la bdd -Ignacio.
 # TODO -cFeature -v1.5 : Hay que agregar un manejo de errores -Ignacio.
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
@@ -120,8 +119,19 @@ class StickfixBot:
                 self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
 
     def _delete_from(self, bot, update, args):
-        """"""
-        pass
+        """
+        Deletes a sticker from the database.
+        
+        :param args:
+            List with the tags from which the sticker is going to be removed.
+        """
+        tg_user_id = str(update.effective_user.id)
+        sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
+        if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
+            # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
+            sf_user = self._user_db.get_item('SF-PUBLIC')
+        sf_user.remove_sticker(sticker_id=update.effective_message.reply_to_message.sticker.file_id, sticker_tags=args)
+        self._user_db.add_item(sf_user.id, sf_user)
     
     def _delete_user(self, bot, update):
         """Deletes the user who sent the command from the database."""
@@ -343,7 +353,7 @@ class StickfixBot:
         """Checks for database integrity."""
         if self._user_db.is_empty() and not self._empty_db:
             last_backup = str((self._current_backup_id - 1) % 2)
-    
+
             copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
             copyfile(src="stickfix-user-DB-bk" + last_backup + ".dir", dst="stickfix-user-DB.dir")
             self._logger.info("Database was restored to last backup.")
@@ -414,16 +424,12 @@ class StickfixBot:
         :param backup_id:
             ID of the backup that wants to be restored.
             If no ID is given, restores to the last backup.
-        :return:
-            * `NO_ERROR`: If the method was executed correctly.
-            * `HANDLED_EXCEPTION`: If a known exception was raised during execution.
-            * `UNHANDLED_EXCEPTION`: If an unknown exception was raised during execution.
         """
         try:
             if backup_id is None:
                 backup_id = (self._current_backup_id - 1) % 2
             backup_id = str(backup_id)
-        
+
             copyfile(src="stickfix-user-DB-bk" + backup_id + ".dat", dst="stickfix-user-DB.dat")
             copyfile(src="stickfix-user-DB-bk" + backup_id + ".dir", dst="stickfix-user-DB.dir")
             self._logger.info("Database was restored to backup %s.", backup_id)

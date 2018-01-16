@@ -4,7 +4,7 @@
 """
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.3"
+__version__ = "1.4.3"
 
 
 class StickfixUser:
@@ -67,3 +67,18 @@ class StickfixUser:
         """
         if user_id in self.cached_stickers:
             del self.cached_stickers[user_id]
+
+    def remove_sticker(self, sticker_id, sticker_tags):
+        """
+        Removes a sticker with the specified tags from the database.
+        
+        :param sticker_id:
+            ID of the sticker to be removed.
+        :param sticker_tags:
+            List of tags that contains the sticker.
+        """
+        for tag in sticker_tags:
+            if tag in self.stickers:
+                self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
+                if len(self.stickers[tag]) == 0:
+                    del self.stickers[tag]
