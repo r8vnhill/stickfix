@@ -4,6 +4,7 @@
 """
 
 import logging
+import random
 from uuid import uuid4
 
 from telegram import InlineQueryResultCachedSticker, ParseMode
@@ -14,7 +15,7 @@ from sf_database import ShelveDB
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.2"
+__version__ = "1.3"
 
 
 class StickfixBot:
@@ -44,6 +45,7 @@ class StickfixBot:
         self._dispatcher.add_handler(CommandHandler("setMode", self._set_mode, pass_args=True))
         self._dispatcher.add_handler(CommandHandler("add", self._add, pass_args=True))
         self._dispatcher.add_handler(CommandHandler('get', self._get_all, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("shuffle", self._set_shuffle, pass_args=True))
         self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
         # TODO -cFeature -v1.4 : Implementar comandos para manejar la BDD -Ignacio.
@@ -130,7 +132,7 @@ class StickfixBot:
         else:
             sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
                 else self._user_db.get_item('SF-PUBLIC')
-    
+
             sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
             for file_id in sticker_list:
                 bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
@@ -203,6 +205,40 @@ class StickfixBot:
             self._user_db.add_item(user.id, user)
             update.message.reply_text("Ok.")
 
+    def _set_shuffle(self, bot, update, args):
+        """
+        Turns on or off the shuffle mode.
+        By default shuffle is off.
+        
+        :param args:
+            Desired mode. Can be `on` or `off`
+        """
+        if len(args) != 1:
+            update.message.reply_text(
+                "Sorry, this command only accepts 1 parameter. Send `/shuffle on` or `/shuffle off`.",
+                parse_mode=ParseMode.MARKDOWN)
+        else:
+            tg_user = update.effective_user
+            tg_user_id = str(tg_user.id)
+            # Se crea el usuario si no está en la BDD.
+            if tg_user_id not in self._user_db:
+                self._logger.info("User %s was added to the database", tg_user.username)
+                self._create_user(tg_user_id)
+        
+            user = self._user_db.get_item(tg_user_id)
+            if args[0].upper() == 'ON':
+                user.shuffle = StickfixUser.ON
+                self._logger.info("User %s turned on the shuffle mode", tg_user.username)
+            elif args[0].upper() == 'PUBLIC':
+                user.shuffle = StickfixUser.OFF
+                self._logger.info("User %s turned off the shuffle mode", tg_user.username)
+            else:
+                update.message.reply_text("Sorry, I didn't understand. Send `/shuffle on` or `/shuffle off`.",
+                                          parse_mode=ParseMode.MARKDOWN)
+                return
+            self._user_db.add_item(user.id, user)
+            update.message.reply_text("Ok.")
+    
     def _start(self, bot, update):
         """Greets the user."""
         tg_user = update.effective_user
@@ -217,6 +253,7 @@ class StickfixBot:
 
     # region Inline queries
     def _inline_get(self, bot, update):
+        """Gets all the stickers linked with a list of tags and sends them as an inline query answer."""
         tg_inline = update.inline_query
         tg_query = tg_inline.query
         tg_user_id = str(update.effective_user.id)
@@ -232,7 +269,7 @@ class StickfixBot:
     
         if offset == 0:
             sf_user.remove_cached_stickers(tg_user_id)
-        sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id)
+        sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user.shuffle)
         results = []
     
         upper_bound = min(len(sticker_list), offset + 50)
@@ -250,17 +287,6 @@ class StickfixBot:
         self._logger.info("Answered inline query for %s.", update.chosen_inline_result.query)
 
     # endregion
-
-    def _create_guest(self, user_id):
-        """
-        Creates a temporary `StickfixUser` and adds it to the database.
-
-        :param user_id:
-            ID of the user to be created.
-        """
-        user = StickfixUser(user_id)
-        self._user_db.add_item(user_id, user)
-        return user
     
     def _create_user(self, user_id):
         """
@@ -290,7 +316,7 @@ class StickfixBot:
         except TelegramError as e:
             self._logger.error(e.message)
 
-    def _get_sticker_list(self, sf_user, tags, user_id):
+    def _get_sticker_list(self, sf_user, tags, user_id, shuffle=False):
         """
         Gets all the stickers from a user that mathces the given tags.
         
@@ -307,7 +333,8 @@ class StickfixBot:
             if sf_user.private_mode == StickfixUser.OFF:
                 match = self._user_db.get_item('SF-PUBLIC').get_stickers(sticker_tag=tag)
             stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
-        # TODO -cFeature -v1.3 : Agregar shuffle -Ignacio.
         sticker_list = list(set.intersection(*stickers))
+        if shuffle:
+            random.shuffle(sticker_list)
         sf_user.cached_stickers[user_id] = {str_tags: sticker_list}
         return sticker_list

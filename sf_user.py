@@ -4,7 +4,7 @@
 """
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.2"
+__version__ = "1.3"
 
 
 class StickfixUser:
@@ -22,6 +22,7 @@ class StickfixUser:
         self.stickers = dict()
         self.cached_stickers = {}
         self.private_mode = self.OFF
+        self._shuffle = self.OFF
     
     def add_sticker(self, sticker_id, sticker_tags):
         """
