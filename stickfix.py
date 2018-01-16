@@ -16,9 +16,11 @@ from sf_database import ShelveDB
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 
-# TODO -cFeature -v1.4.2 : Hay que implementar el comando `/restore` para restaurar la bdd a un punto anterior -Ignacio.
+
+# TODO -cFeature -v1.4.3 : Falta un comando para borrar stickers de la bdd -Ignacio.
+# TODO -cFeature -v1.5 : Hay que agregar un manejo de errores -Ignacio.
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
 
@@ -39,8 +41,8 @@ class StickfixBot:
             List containing the id's of the users with admin privilege.
         """
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-        self.admins = admins
-        self._backup_id = 0
+        self._admins = admins
+        self._current_backup_id = 0
         self._user_db = ShelveDB("stickfix-user-DB")
         self._logger = logging.getLogger(__name__)
         self._empty_db = False  # Indica si se borró la bdd manualmente.
@@ -61,6 +63,7 @@ class StickfixBot:
         self._dispatcher.add_handler(CommandHandler('get', self._get_all, pass_args=True))
         self._dispatcher.add_handler(CommandHandler("shuffle", self._set_shuffle, pass_args=True))
         self._dispatcher.add_handler(CommandHandler("deleteFrom", self._delete_from, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("restore", self._restore, pass_args=True))
         self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
         # endregion
@@ -187,6 +190,25 @@ class StickfixBot:
             parse_mode=ParseMode.MARKDOWN
         )
 
+    def _restore(self, bot, update, args):
+        """
+        Restores the database to a previous version.
+        
+        :param args:
+            ID of the backup that wants to be restored.
+        """
+        tg_msg = update.message
+        if update.effective_user.id in self._admins:
+            n = len(args)
+            if n == 0:
+                self._restore_from_backup()
+            elif n == 1:
+                self._restore_from_backup(int(args[0]))
+            else:
+                tg_msg.reply_text("Wrong number of parameters. This command only accepts 1 parameter.")
+        else:
+            tg_msg.reply_text("You have no permission to use this command. Please contact an admin.")
+    
     def _set_mode(self, bot, update, args):
         """
         Changes the user mode to `PUBLIC` or `PRIVATE`.
@@ -308,10 +330,10 @@ class StickfixBot:
     def _periodic_backup(self, bot, job):
         """Creates a backup of the database periodically."""
         try:
-            copyfile(src="stickfix-user-DB.dat", dst="stickfix-user-DB-bk" + str(self._backup_id) + ".dat")
-            copyfile(src="stickfix-user-DB.dir", dst="stickfix-user-DB-bk" + str(self._backup_id) + ".dir")
-            self._logger.info("Created backup file stickfix-user-DB-bk" + str(self._backup_id))
-            self._backup_id = (self._backup_id + 1) % 2
+            copyfile(src="stickfix-user-DB.dat", dst="stickfix-user-DB-bk" + str(self._current_backup_id) + ".dat")
+            copyfile(src="stickfix-user-DB.dir", dst="stickfix-user-DB-bk" + str(self._current_backup_id) + ".dir")
+            self._logger.info("Created backup file stickfix-user-DB-bk" + str(self._current_backup_id))
+            self._current_backup_id = (self._current_backup_id + 1) % 2
         except OSError as e:
             self._logger.error(e.strerror)
         except Exception as e:
@@ -319,20 +341,21 @@ class StickfixBot:
 
     def _periodic_database_check(self, bot, job):
         """Checks for database integrity."""
-        try:
-            if self._user_db.is_empty() and not self._empty_db:
-                last_backup = str((self._backup_id - 1) % 2)
-            
-                copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
-                copyfile(src="stickfix-user-DB-bk" + last_backup + ".dir", dst="stickfix-user-DB.dir")
-                self._logger.info("Database was restored to last backup.")
-            self._empty_db = False
-        except OSError as e:
-            self._logger.error(e.strerror)
-        except Exception as e:
-            self._logger.error(e.__cause__)
-
+        if self._user_db.is_empty() and not self._empty_db:
+            last_backup = str((self._current_backup_id - 1) % 2)
+    
+            copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
+            copyfile(src="stickfix-user-DB-bk" + last_backup + ".dir", dst="stickfix-user-DB.dir")
+            self._logger.info("Database was restored to last backup.")
+        self._empty_db = False
+    
     # endregion
+
+    def _contact_admins(self, bot, message):
+        """Sends a message to all admin users."""
+        for admin_id in self._admins:
+            bot.send_message(chat_id=admin_id, text=message)
+    
     def _create_user(self, user_id):
         """
         Creates a new `StickfixUser` and adds it to the database.
@@ -383,3 +406,28 @@ class StickfixBot:
             random.shuffle(sticker_list)
         sf_user.cached_stickers[user_id] = {str_tags: sticker_list}
         return sticker_list
+
+    def _restore_from_backup(self, backup_id=None):
+        """
+        Restores the database to the indicated backup.
+        
+        :param backup_id:
+            ID of the backup that wants to be restored.
+            If no ID is given, restores to the last backup.
+        :return:
+            * `NO_ERROR`: If the method was executed correctly.
+            * `HANDLED_EXCEPTION`: If a known exception was raised during execution.
+            * `UNHANDLED_EXCEPTION`: If an unknown exception was raised during execution.
+        """
+        try:
+            if backup_id is None:
+                backup_id = (self._current_backup_id - 1) % 2
+            backup_id = str(backup_id)
+        
+            copyfile(src="stickfix-user-DB-bk" + backup_id + ".dat", dst="stickfix-user-DB.dat")
+            copyfile(src="stickfix-user-DB-bk" + backup_id + ".dir", dst="stickfix-user-DB.dir")
+            self._logger.info("Database was restored to backup %s.", backup_id)
+        except OSError as e:
+            self._logger.error(e.strerror)
+        except Exception as e:
+            self._logger.error(str(e.__class__.__name__) + ": " + ' | '.join(e.args))
