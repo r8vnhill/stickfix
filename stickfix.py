@@ -8,7 +8,7 @@ import random
 from shutil import copyfile
 from uuid import uuid4
 
-from telegram import (InlineQueryResultArticle, InlineQueryResultCachedSticker, InputTextMessageContent, ParseMode)
+from telegram import InlineQueryResultArticle, InlineQueryResultCachedSticker, InputTextMessageContent, ParseMode
 from telegram.error import BadRequest, ChatMigrated, NetworkError, TelegramError, TimedOut, Unauthorized
 from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryHandler, Updater
 
@@ -17,7 +17,7 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.5"
+__version__ = "1.6"
 
 
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
@@ -87,7 +87,7 @@ class StickfixBot:
             if 'SF-PUBLIC' not in self._user_db:
                 self._create_user('SF-PUBLIC')
                 self._logger.info('Created SF-PUBLIC user.')
-    
+
             tg_reply_to = update.effective_message.reply_to_message
             tg_msg = update.message
             tg_user = update.effective_user
@@ -106,23 +106,24 @@ class StickfixBot:
                 raise NoStickerError(
                     err_message="Command /add called by user " + tg_user.username + " raised an exception.",
                     err_cause="sticker is None")
-    
+
             if len(args) == 0:  # Si no se especifica un tag, se toma el emoji asociado al sticker.
                 tags = [tg_sticker.emoji]
             else:
                 tags = args
-    
+
             tg_username = tg_user.username
             sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
-    
+
             if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
                 # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
                 sf_user = self._user_db.get_item('SF-PUBLIC')
                 tg_username = 'stickfix-public'
-    
+
             sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
             self._user_db.add_item(sf_user.id, sf_user)
             self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
+            tg_msg.reply_text("Ok.")
         except NoStickerError as e:
             self._log_error(e)
         except TelegramError as e:
@@ -168,6 +169,8 @@ class StickfixBot:
             sf_user.remove_sticker(sticker_id=update.effective_message.reply_to_message.sticker.file_id,
                                    sticker_tags=args)
             self._user_db.add_item(sf_user.id, sf_user)
+            self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(args), tg_user.username)
+            update.message.reply_text("Ok.")
         except InputError as e:
             self._log_error(e)
         except NoStickerError as e:
@@ -218,7 +221,7 @@ class StickfixBot:
                                  err_cause="Not enough arguments.")
             sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
                 else self._user_db.get_item('SF-PUBLIC')
-    
+
             sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
             for file_id in sticker_list:
                 bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
@@ -242,7 +245,7 @@ class StickfixBot:
                 'manage them more easily. '
                 'By default, all tags are global (everyone can access them), but '
                 'you can also create your own _personal collection_ of tags.\n'
-        
+
                 'You can control me by sending me these commands:\n'
                 '/tags \[p] - _Sends a message with all the tags that have '
                 'stickers_\n'
@@ -328,7 +331,7 @@ class StickfixBot:
             if tg_user_id not in self._user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
-    
+
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'PRIVATE':
                 user.private_mode = StickfixUser.ON
@@ -375,7 +378,7 @@ class StickfixBot:
             if tg_user_id not in self._user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
-    
+
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'ON':
                 user.shuffle = StickfixUser.ON
@@ -425,36 +428,41 @@ class StickfixBot:
             tg_user_id = str(update.effective_user.id)
             sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
                 else self._user_db.get_item('SF-PUBLIC')
-    
+
             offset = 0 if not tg_inline.offset else int(tg_inline.offset)
-    
+            self._logger.info(str(offset))  # Para debug. Borrar.
+            tags = tg_query.split(" ")
+            
             results = []
             if offset == 0:
                 sf_user.remove_cached_stickers(tg_user_id)
                 if not tg_query:
-                    # TODO -cFeature -v1.6 : Se debería elegir un tag aleatorio si no se ingresa query.
+                    if sf_user.private_mode == StickfixUser.ON:
+                        tags = sf_user.random_tag()
+                    else:
+                        tags = self._user_db.get_item('SF-PUBLIC').random_tag()
+                    display_title = "Showing stickers in: " + tags[0] if len(tags) != 0 \
+                        else "I have no stickers to show you, try adding your own"
                     results.append(
                         InlineQueryResultArticle(
-                            id=uuid4(), title="Showing stickers in <tag>",
-                            description="Click here if you want me to send a message to this chat with help.",
-                            input_message_content=InputTextMessageContent("/help@r8vnbot")))
-                    # return
-            tags = tg_query.split(" ")
-    
+                            id=uuid4(), title=display_title,
+                            description="Click this if you want me to send a message to this chat with help.",
+                            input_message_content=InputTextMessageContent("/help@stickfixbot")))
+            
             sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user.shuffle)
-    
+
             upper_bound = min(len(sticker_list), offset + 49)
             for i in range(offset, upper_bound):
                 results.append(InlineQueryResultCachedSticker(id=uuid4(), sticker_file_id=sticker_list[i]))
-    
+
             bot.answer_inline_query(tg_inline.id, results, cache_time=1, is_personal=True, next_offset=str(offset + 49))
             self._user_db.add_item(sf_user.id, sf_user)
         except TelegramError as e:
             raise e
         except Exception as e:
             self._notify_error(bot, e,
-                               "An unexpected exception occured while calling inline mode with query: " +
-                               update.inline_query.query)
+                               "An unexpected exception occured while calling inline mode with query: `" +
+                               update.inline_query.query + "`.")
     
     def _on_inline_result(self, bot, update):
         try:
@@ -488,7 +496,7 @@ class StickfixBot:
         try:
             if self._user_db.is_empty() and not self._empty_db:
                 last_backup = str((self._current_backup_id - 1) % 2)
-        
+
                 copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
                 copyfile(src="stickfix-user-DB-bk" + last_backup + ".dir", dst="stickfix-user-DB.dir")
                 self._logger.info("Database was restored to last backup.")
@@ -497,13 +505,13 @@ class StickfixBot:
             raise e
         except Exception as e:
             self._notify_error(bot, e, "There was an unexpected error during automatic database check.")
-            
+
     # endregion
 
     def _contact_admins(self, bot, message):
         """Sends a message to all admin users."""
         for admin_id in self._admins:
-            bot.send_message(chat_id=admin_id, text=message)
+            bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.MARKDOWN)
     
     def _create_user(self, user_id):
         """
@@ -542,9 +550,13 @@ class StickfixBot:
         """
         # Hay que pensar si hay alguna manera menos redundante de implementar esto -Ignacio.
         str_tags = '-'.join(tags)
-        if str_tags in sf_user.cached_stickers:
+        if user_id in sf_user.cached_stickers:
+            if str_tags == '':
+                return list(sf_user.cached_stickers[user_id].values())[0]
             return sf_user.cached_stickers[user_id][str_tags]
         stickers = []
+        if len(tags) == 0:
+            return stickers
         for tag in tags:
             match = set()
             if sf_user.private_mode == StickfixUser.OFF:

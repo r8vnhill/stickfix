@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 """
+import random
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.4.3"
+__version__ = "1.6"
 
 
 class StickfixUser:
@@ -57,7 +58,14 @@ class StickfixUser:
         if sticker_tag in self.stickers:
             return set(self.stickers[sticker_tag])
         return set()
-    
+
+    def random_tag(self):
+        """Returns a random tag from the database."""
+        tag_list = list(self.stickers.keys())
+        if len(tag_list) == 0:
+            return []
+        return [random.choice(tag_list)]
+        
     def remove_cached_stickers(self, user_id=None):
         """
         Removes the cached stickers for the user.
