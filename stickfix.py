@@ -18,8 +18,6 @@ from sf_user import StickfixUser
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "1.4.1"
 
-
-# TODO -cFeature -v1.4.1 : Se podría usar una job queue para comprobar la bdd periodicamente -Ignacio.
 # TODO -cFeature -v1.4.2 : Hay que implementar el comando `/restore` para restaurar la bdd a un punto anterior -Ignacio.
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
@@ -45,13 +43,15 @@ class StickfixBot:
         self._backup_id = 0
         self._user_db = ShelveDB("stickfix-user-DB")
         self._logger = logging.getLogger(__name__)
-
+        self._empty_db = False  # Indica si se borró la bdd manualmente.
+        
         self._updater = Updater(token)
         self._dispatcher = self._updater.dispatcher
 
         self._job_queue = self._updater.job_queue
-        self._job_queue.run_repeating(self._periodic_backup, interval=(12 * 60 * 60), first=0)
-
+        self._job_queue.run_repeating(self._periodic_backup, interval=43200, first=0)
+        self._job_queue.run_repeating(self._periodic_database_check, interval=3600, first=1800)
+        
         # region Handlers
         self._dispatcher.add_handler(CommandHandler("start", self._start))
         self._dispatcher.add_handler(CommandHandler("help", self._help))
@@ -304,18 +304,35 @@ class StickfixBot:
 
     # endregion
 
+    # region Job queue callbacks
     def _periodic_backup(self, bot, job):
         """Creates a backup of the database periodically."""
         try:
-            copyfile("stickfix-user-DB.dat", "stickfix-user-DB-bk" + str(self._backup_id) + ".dat")
-            copyfile("stickfix-user-DB.dir", "stickfix-user-DB-bk" + str(self._backup_id) + ".dir")
+            copyfile(src="stickfix-user-DB.dat", dst="stickfix-user-DB-bk" + str(self._backup_id) + ".dat")
+            copyfile(src="stickfix-user-DB.dir", dst="stickfix-user-DB-bk" + str(self._backup_id) + ".dir")
             self._logger.info("Created backup file stickfix-user-DB-bk" + str(self._backup_id))
-            self._backup_id = (self._backup_id + 1) % 3
+            self._backup_id = (self._backup_id + 1) % 2
         except OSError as e:
             self._logger.error(e.strerror)
         except Exception as e:
             self._logger.error(e.__cause__)
-    
+
+    def _periodic_database_check(self, bot, job):
+        """Checks for database integrity."""
+        try:
+            if self._user_db.is_empty() and not self._empty_db:
+                last_backup = str((self._backup_id - 1) % 2)
+            
+                copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
+                copyfile(src="stickfix-user-DB-bk" + last_backup + ".dir", dst="stickfix-user-DB.dir")
+                self._logger.info("Database was restored to last backup.")
+            self._empty_db = False
+        except OSError as e:
+            self._logger.error(e.strerror)
+        except Exception as e:
+            self._logger.error(e.__cause__)
+
+    # endregion
     def _create_user(self, user_id):
         """
         Creates a new `StickfixUser` and adds it to the database.

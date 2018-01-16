@@ -7,7 +7,7 @@ import json
 import shelve
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.2"
+__version__ = "1.4.1"
 
 
 class ShelveDB:
@@ -38,6 +38,10 @@ class ShelveDB:
             except KeyError as e:
                 # print(e)
                 return []
+
+    def is_empty(self):
+        """Checks if the database is empty."""
+        return len(self.get_keys()) == 0
     
     def reset(self):
         with shelve.open(self.__name__) as db:
