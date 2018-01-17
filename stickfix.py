@@ -17,7 +17,7 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
@@ -376,10 +376,10 @@ class StickfixBot:
 
             user = self._user_db.get_item(tg_user_id)
             if args[0].upper() == 'ON':
-                user.shuffle = StickfixUser.ON
+                user._shuffle = StickfixUser.ON
                 self._logger.info("User %s turned on the shuffle mode", tg_user.username)
             elif args[0].upper() == 'OFF':
-                user.shuffle = StickfixUser.OFF
+                user._shuffle = StickfixUser.OFF
                 self._logger.info("User %s turned off the shuffle mode", tg_user.username)
             else:
                 update.message.reply_text("Sorry, I didn't understand. Send `/shuffle on` or `/shuffle off`.",
