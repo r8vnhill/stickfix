@@ -17,7 +17,7 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0"
+__version__ = "2.0.1"
 
 
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
@@ -282,8 +282,8 @@ class StickfixBot:
             if tg_user.id not in self._admins:
                 tg_msg.reply_text("You have no permission to use this command. Please contact an admin.")
                 raise InsufficientPermissionsError(
-                    err_message="Command /get called by user " + tg_user.username + " raised an exception.",
-                    err_cause="User is not an admin.")
+                    err_message="Command /restore called by user " + str(tg_user.username) + " raised an exception.",
+                    err_cause="User " + str(tg_user.username) + " is not an admin.")
             n = len(args)
             if n > 1:
                 tg_msg.reply_text("This command can't take more than 1 parameter")
@@ -296,7 +296,7 @@ class StickfixBot:
                 self._restore_from_backup(int(args[0]))
             tg_msg.reply_text("Ok.")
         except InsufficientPermissionsError as e:
-            self._notify_error(bot, e, e.message)
+            self._notify_error(bot, e, e.message, e.cause)
         except InputError as e:
             self._log_error(e)
         except TelegramError as e:
@@ -425,7 +425,6 @@ class StickfixBot:
                 else self._user_db.get_item('SF-PUBLIC')
 
             offset = 0 if not tg_inline.offset else int(tg_inline.offset)
-            self._logger.info(str(offset))  # Para debug. Borrar.
             tags = tg_query.split(" ")
             
             results = []
@@ -443,8 +442,9 @@ class StickfixBot:
                             id=uuid4(), title=display_title,
                             description="Click this if you want me to send a message to this chat with help.",
                             input_message_content=InputTextMessageContent("/help@stickfixbot")))
-            
-            sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user.shuffle)
+
+            # noinspection PyProtectedMember
+            sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user._shuffle)
 
             upper_bound = min(len(sticker_list), offset + 49)
             for i in range(offset, upper_bound):
@@ -574,7 +574,7 @@ class StickfixBot:
         """Logs and notifies admins about errors."""
         if cause is None:
             cause = " | ".join(error.args)
-        self._contact_admins(bot, message + " See log file for details.")
+        self._contact_admins(bot, message + " " + cause + " See log file for details.")
         self._logger.error(message + " Type: " + error.__class__.__name__ + ". Details: " + cause)
     
     def _restore_from_backup(self, backup_id=None):

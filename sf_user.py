@@ -5,7 +5,7 @@
 import random
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.6"
+__version__ = "2.0.1"
 
 
 class StickfixUser:
