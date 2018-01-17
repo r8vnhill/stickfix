@@ -17,7 +17,7 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "1.6"
+__version__ = "2.0"
 
 
 # TODO -cFeature -v2.1: Implementar comando `/addSet`.
@@ -239,34 +239,29 @@ class StickfixBot:
     def _help(self, bot, update):
         """Sends a message with help to the user."""
         try:
-            # TODO -cFeature -v2.0 : Actualizar ayuda de acuerdo a la nueva versión -Ignacio.
-            update.message.reply_text(
-                "Yo! I'm StickFix, I can link keywords with stickers so you can "
-                'manage them more easily. '
-                'By default, all tags are global (everyone can access them), but '
-                'you can also create your own _personal collection_ of tags.\n'
-
-                'You can control me by sending me these commands:\n'
-                '/tags \[p] - _Sends a message with all the tags that have '
-                'stickers_\n'
-                '/add \[p] <tag> - _Links a sticker with a tag, where <tag> is a '
-                'hashtag. For this to work you have to reply to a message that '
-                'contains a sticker with the command; I need access to the '
-                'messages to do this._\n'
-                '/deleteFrom \[p] <tag> - _Works like /add, it deletes a sticker '
-                'from a tag._\n'
-                '\n'
-                '*In private:*\n'
-                '/get \[p] <tag> - _Sends all stickers tagged with <tag>._\n'
-                'Where \[p] is an optional parameter that indicates if the sticker '
-                'is going to be added to (or retrieved from) a personal collection.'
-                ' For example, if you send me `/add p #tag` I will store the '
-                'sticker you signaled me to your personal collection.\n'
-                '\n'
-                'You can also call me inline like `@stickfixbot [p] [r] #tag` to '
-                'see a list of all the stickers you have tagged with #tag, where '
-                '\[p] is the same as before, and \[r] indicates that you want to '
-                'get a random sticker from the #tag, both parameters are optional.',
+            bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Yo! I'm StickFix, I can link keywords with stickers so you can manage them more easily. By "
+                     "default, all tags are public (everyone can access them), but you can also create your own "
+                     "_private collection_ of stickers.\n"
+                     "You can use any word or even emojis as tags, so for example, you can link a sticker with the tag "
+                     "`hello`. \n"
+                     "To use this bot, you simply have to call it inline like `@stickfixbot tag`, and it will show a "
+                     "list with all the stickers linked with `tag`. You can even use more than one tag and the bot "
+                     "will search for all the stickers that have all those tags in common.",
+                parse_mode=ParseMode.MARKDOWN)
+            bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="*You can control me by sending me these commands:*\n"
+                     "`/add tags` - Links a sticker with one or more tags. For this to work you have to reply to a "
+                     "message that contains a sticker with the command; I need access to the messages to do this.\n"
+                     "`/deleteFrom tags` - Is similar to `/add`, but this removes a sticker from a tag.\n"
+                     "`/setMode (private|public)` - Changes the user to public or private mode. In private mode only "
+                     "you will be able to see the stickers you add; by default all users are in public mode.\n"
+                     "`/shuffle (on|off)` - Turn this on if you want the stickers in inline mode to be shown in "
+                     "random order; it's off by default.\n"
+                     "`/deleteMe` - If you want to be removed from the database. This will erase all the stickers you "
+                     "added in private mode and can't be undone.",
                 parse_mode=ParseMode.MARKDOWN
             )
         except TelegramError as e:
@@ -383,7 +378,7 @@ class StickfixBot:
             if args[0].upper() == 'ON':
                 user.shuffle = StickfixUser.ON
                 self._logger.info("User %s turned on the shuffle mode", tg_user.username)
-            elif args[0].upper() == 'PUBLIC':
+            elif args[0].upper() == 'OFF':
                 user.shuffle = StickfixUser.OFF
                 self._logger.info("User %s turned off the shuffle mode", tg_user.username)
             else:
