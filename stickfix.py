@@ -18,8 +18,10 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 
+# TODO -cFeature -v2.1 : Se debe implementar un comando para enviar la BDD  —Ignacio.
+# TODO -cImprove -v2.1 : El cache debería borrarse periodicamente para evitar el uso excesivo de memoria —Ignacio.
 # TODO -cFeature -v2.1 : Implementar comando `/contact` —Ignacio
 # TODO -cFeature -v2.2 : Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set`   —Ignacio.
@@ -424,12 +426,6 @@ class StickfixBot:
     # endregion
 
     # region Inline queries
-    # TODO -cBug -v2.0.4 : Este método produce un error al llamar el inline sin parámetros.
-    # Causa: desconocida.
-    # Detalles:
-    #   An unexpected exception occured while calling inline mode with query: . Can't convert 'NoneType' object to str
-    #   implicitly
-    # Error notificado en la fecha: 17-01-18 15:53:19   —Ignacio.
     def _inline_get(self, bot, update):
         """Gets all the stickers linked with a list of tags and sends them as an inline query answer."""
         try:
@@ -440,7 +436,7 @@ class StickfixBot:
                 else self._user_db.get_item('SF-PUBLIC')
 
             offset = 0 if not tg_inline.offset else int(tg_inline.offset)
-            tags = tg_query.split(" ")
+            tags = str(tg_query).split(" ")
             
             results = []
             if offset == 0:
@@ -470,24 +466,20 @@ class StickfixBot:
                                         next_offset=str(offset + 49))
             except TelegramError as e:
                 self._notify_error(bot, e,
-                                   "An exception occured while trying to get inline results with query: <code> " +
-                                   update.inline_query.query + "</code>")
+                                   "An exception occured while trying to get inline results with tags: <code> " +
+                                   " ".join(tags) + "</code>")
             self._user_db.add_item(sf_user.id, sf_user)
         except Exception as e:
             self._notify_error(bot, e,
                                "An unexpected exception occured while calling inline mode with query: <code>" +
                                update.inline_query.query + "</code>.")
 
-    # TODO -cBug -v2.0.4 : Este método produce un error al tratar de borrar el cache de stickers. Error recurrente (!).
-    # Causa: desconocida.
-    # Detalles:
-    #   An unexpected exception occured on chosen inline result. 'list' object has no attribute
-    #   'remove_cached_stickers'
-    # Error notificado en la fecha: 17-01-18 14:25:24   — Ignacio.
     def _on_inline_result(self, bot, update):
         try:
             tg_user_id = str(update.effective_user.id)
             sf_user = self._user_db.get_item(tg_user_id)
+            if not sf_user:
+                sf_user = self._user_db.get_item('SF-PUBLIC')
             sf_user.remove_cached_stickers(tg_user_id)
             self._user_db.add_item(sf_user.id, sf_user)
             self._logger.info("Answered inline query for %s.", update.chosen_inline_result.query)

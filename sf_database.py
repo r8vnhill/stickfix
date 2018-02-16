@@ -6,7 +6,7 @@
 import shelve
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0"
+__version__ = "2.0.4"
 
 
 class ShelveDB:
@@ -35,7 +35,7 @@ class ShelveDB:
             try:
                 return db[key]
             except KeyError:
-                return []
+                return False
 
     def is_empty(self):
         """Checks if the database is empty."""
