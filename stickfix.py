@@ -6,6 +6,7 @@
 import logging
 import random
 from shutil import copyfile
+from traceback import format_exc
 from uuid import uuid4
 
 from telegram import InlineQueryResultArticle, InlineQueryResultCachedSticker, InputTextMessageContent, ParseMode
@@ -17,11 +18,32 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 
+# TODO -cFeature -v2.1 : Implementar comando `/contact` —Ignacio
+# TODO -cFeature -v2.2 : Implementar comando `/addSet`.
+# Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set`   —Ignacio.
 
-# TODO -cFeature -v2.1: Implementar comando `/addSet`.
-# Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set` -Ignacio.
+HELP_MESSAGE = ("Yo! I'm StickFix, I can link keywords with stickers so you can manage them more easily. By "
+                "default, all tags are public (everyone can access them), but you can also create your own "
+                "_private collection_ of stickers.\n"
+                "You can use any word or even emojis as tags, so for example, you can link a sticker with the tag "
+                "`hello`. \n"
+                "To use this bot, you simply have to call it inline like `@stickfixbot tag`, and it will show a "
+                "list with all the stickers linked with `tag`. You can even use more than one tag and the bot "
+                "will search for all the stickers that have all those tags in common.",
+                "*You can control me by sending me these commands:*\n"
+                "`/add tags` - Links a sticker with one or more tags. For this to work you have to reply to a "
+                "message that contains a sticker with the command; I need access to the messages to do this.\n"
+                "`/deleteFrom tags` - Is similar to `/add`, but this removes a sticker from a tag.\n"
+                "`/setMode (private|public)` - Changes the user to public or private mode. In private mode only "
+                "you will be able to see the stickers you add; by default all users are in public mode.\n"
+                "`/shuffle (on|off)` - Turn this on if you want the stickers in inline mode to be shown in "
+                "random order; it's off by default.\n"
+                "`/deleteMe` - If you want to be removed from the database. This will erase all the stickers you "
+                "added in private mode and can't be undone.",
+                )
+
 
 class StickfixBot:
     """
@@ -96,7 +118,7 @@ class StickfixBot:
                 tg_msg.reply_text(
                     "To add a sticker to the database, you need to *reply to a message* containing the sticker you "
                     "want to add.",
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.HTML)
                 raise NoStickerError(
                     err_message="Command /add called by user " + tg_user.username + " raised an exception.",
                     err_cause="reply_to_message is None.")
@@ -111,19 +133,19 @@ class StickfixBot:
                 tags = [tg_sticker.emoji]
             else:
                 tags = args
-
-            tg_username = tg_user.username
-            sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
-
-            if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
-                # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
-                sf_user = self._user_db.get_item('SF-PUBLIC')
-                tg_username = 'stickfix-public'
-
-            sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
-            self._user_db.add_item(sf_user.id, sf_user)
-            self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
-            tg_msg.reply_text("Ok.")
+            if tags is not None:
+                tg_username = tg_user.username
+                sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
+    
+                if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
+                    # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
+                    sf_user = self._user_db.get_item('SF-PUBLIC')
+                    tg_username = 'stickfix-public'
+    
+                sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
+                self._user_db.add_item(sf_user.id, sf_user)
+                self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
+                tg_msg.reply_text("Ok.")
         except NoStickerError as e:
             self._log_error(e)
         except TelegramError as e:
@@ -151,7 +173,7 @@ class StickfixBot:
                 update.message.reply_text(
                     "To delete a sticker from the database, you need to *reply to a message* containing the sticker "
                     "you want to remove.",
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.HTML)
                 raise NoStickerError(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="reply_to_message is None.")
@@ -186,7 +208,7 @@ class StickfixBot:
         try:
             tg_user = update.effective_user
             tg_user_id = str(tg_user.id)
-            # TODO -cFeature -v2.1 : Pedir confirmación al usuario -Ignacio.
+            # TODO -cFeature -v2.2 : Pedir confirmación al usuario  —Ignacio.
             if tg_user_id in self._user_db:
                 self._user_db.delete_by_key(tg_user_id)
                 self._logger.info("User %s was removed from the database", tg_user.username)
@@ -241,27 +263,11 @@ class StickfixBot:
         try:
             bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="Yo! I'm StickFix, I can link keywords with stickers so you can manage them more easily. By "
-                     "default, all tags are public (everyone can access them), but you can also create your own "
-                     "_private collection_ of stickers.\n"
-                     "You can use any word or even emojis as tags, so for example, you can link a sticker with the tag "
-                     "`hello`. \n"
-                     "To use this bot, you simply have to call it inline like `@stickfixbot tag`, and it will show a "
-                     "list with all the stickers linked with `tag`. You can even use more than one tag and the bot "
-                     "will search for all the stickers that have all those tags in common.",
+                text=HELP_MESSAGE[0],
                 parse_mode=ParseMode.MARKDOWN)
             bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="*You can control me by sending me these commands:*\n"
-                     "`/add tags` - Links a sticker with one or more tags. For this to work you have to reply to a "
-                     "message that contains a sticker with the command; I need access to the messages to do this.\n"
-                     "`/deleteFrom tags` - Is similar to `/add`, but this removes a sticker from a tag.\n"
-                     "`/setMode (private|public)` - Changes the user to public or private mode. In private mode only "
-                     "you will be able to see the stickers you add; by default all users are in public mode.\n"
-                     "`/shuffle (on|off)` - Turn this on if you want the stickers in inline mode to be shown in "
-                     "random order; it's off by default.\n"
-                     "`/deleteMe` - If you want to be removed from the database. This will erase all the stickers you "
-                     "added in private mode and can't be undone.",
+                text=HELP_MESSAGE[1],
                 parse_mode=ParseMode.MARKDOWN
             )
         except TelegramError as e:
@@ -316,8 +322,9 @@ class StickfixBot:
             tg_user = update.effective_user
             if len(args) != 1:
                 update.message.reply_text(
-                    "Sorry, this command only accepts 1 parameter. Send `/setMode private` or `/setMode public`.",
-                    parse_mode=ParseMode.MARKDOWN)
+                    "Sorry, this command only accepts 1 parameter. Send <code>/setMode private</code> or "
+                    "<code>/setMode public</code>.",
+                    parse_mode=ParseMode.HTML)
                 raise InputError(
                     err_message="Command /setMode called by user " + tg_user.username + " raised an exception.",
                     err_cause="Wrong number of arguments.")
@@ -336,8 +343,8 @@ class StickfixBot:
                 self._logger.info("User %s changed to public mode", tg_user.username)
             else:
                 update.message.reply_text(
-                    "Sorry, I didn't understand. Send `/setMode private` or `/setMode public`.",
-                    parse_mode=ParseMode.MARKDOWN)
+                    "Sorry, I didn't understand. Send <code>/setMode private</code> or <code>/setMode public</code>.",
+                    parse_mode=ParseMode.HTML)
                 raise InputError(
                     err_cause=args[0] + " is not a valid argument.",
                     err_message="Command /setMode called by user " + tg_user.username + " raised an exception.")
@@ -363,8 +370,9 @@ class StickfixBot:
             tg_user = update.effective_user
             if len(args) != 1:
                 update.message.reply_text(
-                    "Sorry, this command only accepts 1 parameter. Send `/shuffle on` or `/shuffle off`.",
-                    parse_mode=ParseMode.MARKDOWN)
+                    "Sorry, this command only accepts 1 parameter. Send <code>/shuffle on</code> or <code>/shuffle "
+                    "off</code>.",
+                    parse_mode=ParseMode.HTML)
                 raise InputError(
                     err_message="Command /shuffle called by user " + tg_user.username + " raised an exception.",
                     err_cause="Wrong number of arguments.")
@@ -382,8 +390,9 @@ class StickfixBot:
                 user._shuffle = StickfixUser.OFF
                 self._logger.info("User %s turned off the shuffle mode", tg_user.username)
             else:
-                update.message.reply_text("Sorry, I didn't understand. Send `/shuffle on` or `/shuffle off`.",
-                                          parse_mode=ParseMode.MARKDOWN)
+                update.message.reply_text(
+                    "Sorry, I didn't understand. Send <code>/shuffle on</code> or <code>/shuffle off</code>.",
+                    parse_mode=ParseMode.HTML)
                 raise InputError(
                     err_cause=args[0] + " is not a valid argument.",
                     err_message="Command /shuffle called by user " + tg_user.username + " raised an exception.")
@@ -404,7 +413,7 @@ class StickfixBot:
             tg_user_id = str(tg_user.id)
             update.message.reply_sticker('CAADBAADTAADqAABTgXzVqN6dJUIXwI')
             if tg_user_id not in self._user_db:
-                # TODO -cFeature -v2.1 : Se debería preguntar al usuario si desea ser añadido a la BDD -Ignacio.
+                # TODO -cFeature -v2.2 : Se debería preguntar al usuario si desea ser añadido a la BDD  —Ignacio.
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
         except TelegramError as e:
@@ -415,6 +424,12 @@ class StickfixBot:
     # endregion
 
     # region Inline queries
+    # TODO -cBug -v2.0.4 : Este método produce un error al llamar el inline sin parámetros.
+    # Causa: desconocida.
+    # Detalles:
+    #   An unexpected exception occured while calling inline mode with query: . Can't convert 'NoneType' object to str
+    #   implicitly
+    # Error notificado en la fecha: 17-01-18 15:53:19   —Ignacio.
     def _inline_get(self, bot, update):
         """Gets all the stickers linked with a list of tags and sends them as an inline query answer."""
         try:
@@ -441,24 +456,34 @@ class StickfixBot:
                         InlineQueryResultArticle(
                             id=uuid4(), title=display_title,
                             description="Click this if you want me to send a message to this chat with help.",
-                            input_message_content=InputTextMessageContent("/help@stickfixbot")))
-
+                            input_message_content=InputTextMessageContent("\n\n".join(HELP_MESSAGE),
+                                                                          parse_mode=ParseMode.MARKDOWN)))
+            
             # noinspection PyProtectedMember
             sticker_list = self._get_sticker_list(sf_user, tags, tg_user_id, sf_user._shuffle)
 
             upper_bound = min(len(sticker_list), offset + 49)
             for i in range(offset, upper_bound):
                 results.append(InlineQueryResultCachedSticker(id=uuid4(), sticker_file_id=sticker_list[i]))
-
-            bot.answer_inline_query(tg_inline.id, results, cache_time=1, is_personal=True, next_offset=str(offset + 49))
+            try:
+                bot.answer_inline_query(tg_inline.id, results, cache_time=1, is_personal=True,
+                                        next_offset=str(offset + 49))
+            except TelegramError as e:
+                self._notify_error(bot, e,
+                                   "An exception occured while trying to get inline results with query: <code> " +
+                                   update.inline_query.query + "</code>")
             self._user_db.add_item(sf_user.id, sf_user)
-        except TelegramError as e:
-            raise e
         except Exception as e:
             self._notify_error(bot, e,
-                               "An unexpected exception occured while calling inline mode with query: `" +
-                               update.inline_query.query + "`.")
-    
+                               "An unexpected exception occured while calling inline mode with query: <code>" +
+                               update.inline_query.query + "</code>.")
+
+    # TODO -cBug -v2.0.4 : Este método produce un error al tratar de borrar el cache de stickers. Error recurrente (!).
+    # Causa: desconocida.
+    # Detalles:
+    #   An unexpected exception occured on chosen inline result. 'list' object has no attribute
+    #   'remove_cached_stickers'
+    # Error notificado en la fecha: 17-01-18 14:25:24   — Ignacio.
     def _on_inline_result(self, bot, update):
         try:
             tg_user_id = str(update.effective_user.id)
@@ -506,7 +531,7 @@ class StickfixBot:
     def _contact_admins(self, bot, message):
         """Sends a message to all admin users."""
         for admin_id in self._admins:
-            bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.MARKDOWN)
+            bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.HTML)
     
     def _create_user(self, user_id):
         """
@@ -535,7 +560,8 @@ class StickfixBot:
             self._logger.error(e.message + ". " + " | ".join(e.args))
         except TelegramError as e:
             self._logger.error(e.message + ". " + " | ".join(e.args))
-    
+
+    # TODO -cFeature -v2.0.5: El comando `/get` debería revisar la integridad del tag —Ignacio.
     def _get_sticker_list(self, sf_user, tags, user_id, shuffle=False):
         """
         Gets all the stickers from a user that mathces the given tags.
@@ -574,8 +600,9 @@ class StickfixBot:
         """Logs and notifies admins about errors."""
         if cause is None:
             cause = " | ".join(error.args)
-        self._contact_admins(bot, message + " " + cause + " See log file for details.")
-        self._logger.error(message + " Type: " + error.__class__.__name__ + ". Details: " + cause)
+        self._contact_admins(bot, message + " | " + cause + " | Details: \n <code>" + format_exc() + "</code>")
+        self._logger.error(
+            message + "\n Type: " + error.__class__.__name__ + "\n Details: " + cause + "\n Trace: " + format_exc())
     
     def _restore_from_backup(self, backup_id=None):
         """
