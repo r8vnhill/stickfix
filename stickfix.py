@@ -78,15 +78,15 @@ class StickfixBot:
         self._job_queue.run_repeating(self._periodic_database_check, interval=3600, first=1800)
         
         # region Handlers
-        self._dispatcher.add_handler(CommandHandler("start", self._start))
-        self._dispatcher.add_handler(CommandHandler("help", self._help))
-        self._dispatcher.add_handler(CommandHandler("deleteMe", self._delete_user))
-        self._dispatcher.add_handler(CommandHandler("setMode", self._set_mode, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("add", self._add, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler('get', self._get_all, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("shuffle", self._set_shuffle, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("deleteFrom", self._delete_from, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("restore", self._restore, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("start", self.cmd_start))
+        self._dispatcher.add_handler(CommandHandler("help", self.cmd_help))
+        self._dispatcher.add_handler(CommandHandler("deleteMe", self.cmd_delete_user))
+        self._dispatcher.add_handler(CommandHandler("setMode", self.cmd_set_mode, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("add", self.cmd_add, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler('get', self.cmd_get, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("shuffle", self.cmd_set_shuffle, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("deleteFrom", self.cmd_delete_from, pass_args=True))
+        self._dispatcher.add_handler(CommandHandler("restore", self.cmd_restore, pass_args=True))
         self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
         # endregion
@@ -99,7 +99,7 @@ class StickfixBot:
         self._updater.start_polling()
 
     # region Chat commands
-    def _add(self, bot, update, args):
+    def cmd_add(self, bot, update, args):
         """
         Adds a sticker to the database.
         
@@ -138,12 +138,12 @@ class StickfixBot:
             if tags is not None:
                 tg_username = tg_user.username
                 sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
-    
+
                 if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
                     # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
                     sf_user = self._user_db.get_item('SF-PUBLIC')
                     tg_username = 'stickfix-public'
-    
+
                 sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
                 self._user_db.add_item(sf_user.id, sf_user)
                 self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
@@ -155,8 +155,8 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /add command with "
                                        "parameters: " + ", ".join(args) + ".")
-    
-    def _delete_from(self, bot, update, args):
+
+    def cmd_delete_from(self, bot, update, args):
         """
         Deletes a sticker from the database.
         
@@ -171,7 +171,8 @@ class StickfixBot:
                 raise InputError(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="Not enough arguments.")
-            if tg_reply_to is None:  # Si no se responde a ningún mensaje.
+            if tg_reply_to is None:
+                # Si no se responde a ningún mensaje ni se llamó el comando de manera especial.
                 update.message.reply_text(
                     "To delete a sticker from the database, you need to *reply to a message* containing the sticker "
                     "you want to remove.",
@@ -185,15 +186,7 @@ class StickfixBot:
                 raise NoStickerError(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="sticker is None")
-            tg_user_id = str(tg_user.id)
-            sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
-            if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
-                # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
-                sf_user = self._user_db.get_item('SF-PUBLIC')
-            sf_user.remove_sticker(sticker_id=update.effective_message.reply_to_message.sticker.file_id,
-                                   sticker_tags=args)
-            self._user_db.add_item(sf_user.id, sf_user)
-            self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(args), tg_user.username)
+            self._delete_from(update, tg_user, args)
             update.message.reply_text("Ok.")
         except InputError as e:
             self._log_error(e)
@@ -204,8 +197,8 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /deleteFrom command with "
                                        "parameters: " + ", ".join(args) + ".")
-    
-    def _delete_user(self, bot, update):
+
+    def cmd_delete_user(self, bot, update):
         """Deletes the user who sent the command from the database."""
         try:
             tg_user = update.effective_user
@@ -221,8 +214,8 @@ class StickfixBot:
             raise e
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /deleteMe command.")
-    
-    def _get_all(self, bot, update, args):
+
+    def cmd_get(self, bot, update, args):
         """
         Sends all the stickers of linked with a tag. For debug purposes mainly.
 
@@ -248,7 +241,10 @@ class StickfixBot:
 
             sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
             for file_id in sticker_list:
-                bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
+                try:
+                    bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
+                except TelegramError:
+                    self._delete_from(update, tg_user, args, file_id)
             self._logger.info("Sent stickers tagged with " + ", ".join(args) + " to %s.", tg_username)
         except WrongContextError as e:
             self._log_error(e)
@@ -259,8 +255,8 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /get command with "
                                        "parameters: " + ", ".join(args) + ".")
-    
-    def _help(self, bot, update):
+
+    def cmd_help(self, bot, update):
         """Sends a message with help to the user."""
         try:
             bot.send_message(
@@ -276,8 +272,8 @@ class StickfixBot:
             raise e
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /help command.")
-    
-    def _restore(self, bot, update, args):
+
+    def cmd_restore(self, bot, update, args):
         """
         Restores the database to a previous version.
         
@@ -311,8 +307,8 @@ class StickfixBot:
             raise e
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /deleteMe command.")
-    
-    def _set_mode(self, bot, update, args):
+
+    def cmd_set_mode(self, bot, update, args):
         """
         Changes the user mode to `PUBLIC` or `PRIVATE`.
         By default all users are in `PUBLIC` mode.
@@ -359,8 +355,8 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /setMode command with "
                                        "parameters: " + ", ".join(args) + ".")
-    
-    def _set_shuffle(self, bot, update, args):
+
+    def cmd_set_shuffle(self, bot, update, args):
         """
         Turns on or off the shuffle mode.
         By default shuffle is off.
@@ -407,8 +403,8 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /setMode command with "
                                        "parameters: " + ", ".join(args) + ".")
-    
-    def _start(self, bot, update):
+
+    def cmd_start(self, bot, update):
         """Greets the user."""
         try:
             tg_user = update.effective_user
@@ -502,7 +498,7 @@ class StickfixBot:
             raise e
         except Exception as e:
             self._notify_error(bot, e, "There was an unexpected error while trying to make the periodic backup.")
-    
+
     def _periodic_database_check(self, bot, job):
         """Checks for database integrity."""
         try:
@@ -518,12 +514,23 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "There was an unexpected error during automatic database check.")
 
-    # endregion
-
     def _contact_admins(self, bot, message):
         """Sends a message to all admin users."""
         for admin_id in self._admins:
             bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.HTML)
+
+    # endregion
+
+    def _delete_from(self, update, tg_user, args, sticker_id=None):
+        tg_user_id = str(tg_user.id)
+        sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
+        if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
+            # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
+            sf_user = self._user_db.get_item('SF-PUBLIC')
+        sticker_id = update.effective_message.reply_to_message.sticker.file_id if sticker_id is None else sticker_id
+        sf_user.remove_sticker(sticker_id=sticker_id, sticker_tags=args)
+        self._user_db.add_item(sf_user.id, sf_user)
+        self._logger.info("Sticker deleted from %s's pack with tags: " + ', '.join(args), tg_user.username)
     
     def _create_user(self, user_id):
         """
@@ -553,7 +560,6 @@ class StickfixBot:
         except TelegramError as e:
             self._logger.error(e.message + ". " + " | ".join(e.args))
 
-    # TODO -cFeature -v2.0.5: El comando `/get` debería revisar la integridad del tag —Ignacio.
     def _get_sticker_list(self, sf_user, tags, user_id, shuffle=False):
         """
         Gets all the stickers from a user that mathces the given tags.
