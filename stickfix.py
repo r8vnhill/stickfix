@@ -18,12 +18,9 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.4"
+__version__ = "2.1"
 
-# TODO -cFeature -v2.1 : Se debe implementar un comando para enviar la BDD  —Ignacio.
-# TODO -cImprove -v2.1 : El cache debería borrarse periodicamente para evitar el uso excesivo de memoria —Ignacio.
-# TODO -cFeature -v2.1 : Implementar comando `/contact` —Ignacio
-# TODO -cFeature -v2.2 : Implementar comando `/addSet`.
+# TODO -cAdd -v2.2 : Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set`   —Ignacio.
 
 HELP_MESSAGE = ("Yo! I'm StickFix, I can link keywords with stickers so you can manage them more easily. By "
@@ -66,32 +63,34 @@ class StickfixBot:
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
         self._admins = admins
         self._current_backup_id = 0
-        self._user_db = ShelveDB("stickfix-user-DB")
+        self.user_db = ShelveDB("stickfix-user-DB")
         self._logger = logging.getLogger(__name__)
         self._empty_db = False  # Indica si se borró la bdd manualmente.
         
         self._updater = Updater(token)
-        self._dispatcher = self._updater.dispatcher
+        self.dispatcher = self._updater.dispatcher
 
-        self._job_queue = self._updater.job_queue
-        self._job_queue.run_repeating(self._periodic_backup, interval=43200, first=0)
-        self._job_queue.run_repeating(self._periodic_database_check, interval=3600, first=1800)
+        self.job_queue = self._updater.job_queue
+        self.job_queue.run_repeating(self.periodic_backup, interval=43200, first=0)
+        self.job_queue.run_repeating(self.periodic_database_check, interval=3600, first=1800)
+        self.job_queue.run_repeating(self.periodic_cache_remove, interval=259200, first=0)
         
         # region Handlers
-        self._dispatcher.add_handler(CommandHandler("start", self.cmd_start))
-        self._dispatcher.add_handler(CommandHandler("help", self.cmd_help))
-        self._dispatcher.add_handler(CommandHandler("deleteMe", self.cmd_delete_user))
-        self._dispatcher.add_handler(CommandHandler("setMode", self.cmd_set_mode, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("add", self.cmd_add, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler('get', self.cmd_get, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("shuffle", self.cmd_set_shuffle, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("deleteFrom", self.cmd_delete_from, pass_args=True))
-        self._dispatcher.add_handler(CommandHandler("restore", self.cmd_restore, pass_args=True))
-        self._dispatcher.add_handler(InlineQueryHandler(self._inline_get))
-        self._dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
+        self.dispatcher.add_handler(CommandHandler("start", self.cmd_start))
+        self.dispatcher.add_handler(CommandHandler("help", self.cmd_help))
+        self.dispatcher.add_handler(CommandHandler("deleteMe", self.cmd_delete_user))
+        self.dispatcher.add_handler(CommandHandler("getDB", self.cmd_get_db))
+        self.dispatcher.add_handler(CommandHandler("setMode", self.cmd_set_mode, pass_args=True))
+        self.dispatcher.add_handler(CommandHandler("add", self.cmd_add, pass_args=True))
+        self.dispatcher.add_handler(CommandHandler('get', self.cmd_get, pass_args=True))
+        self.dispatcher.add_handler(CommandHandler("shuffle", self.cmd_set_shuffle, pass_args=True))
+        self.dispatcher.add_handler(CommandHandler("deleteFrom", self.cmd_delete_from, pass_args=True))
+        self.dispatcher.add_handler(CommandHandler("restore", self.cmd_restore, pass_args=True))
+        self.dispatcher.add_handler(InlineQueryHandler(self._inline_get))
+        self.dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
         # endregion
-        self._dispatcher.add_error_handler(self._error_callback)  # Para logging de errores.
-
+        self.dispatcher.add_error_handler(self._error_callback)  # Para logging de errores.
+    
     def run(self):
         """
         Starts the bot.
@@ -108,10 +107,10 @@ class StickfixBot:
         """
         # Se debe crear el usuario SF-PUBLIC si no existe.
         try:
-            if 'SF-PUBLIC' not in self._user_db:
+            if 'SF-PUBLIC' not in self.user_db:
                 self._create_user('SF-PUBLIC')
                 self._logger.info('Created SF-PUBLIC user.')
-
+    
             tg_reply_to = update.effective_message.reply_to_message
             tg_msg = update.message
             tg_user = update.effective_user
@@ -130,22 +129,22 @@ class StickfixBot:
                 raise NoStickerError(
                     err_message="Command /add called by user " + tg_user.username + " raised an exception.",
                     err_cause="sticker is None")
-
+    
             if len(args) == 0:  # Si no se especifica un tag, se toma el emoji asociado al sticker.
                 tags = [tg_sticker.emoji]
             else:
                 tags = args
             if tags is not None:
                 tg_username = tg_user.username
-                sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
-
+                sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db else None
+                
                 if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
                     # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
-                    sf_user = self._user_db.get_item('SF-PUBLIC')
+                    sf_user = self.user_db.get_item('SF-PUBLIC')
                     tg_username = 'stickfix-public'
 
                 sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
-                self._user_db.add_item(sf_user.id, sf_user)
+                self.user_db.add_item(sf_user.id, sf_user)
                 self._logger.info("Sticker added to %s's pack with tags: " + ', '.join(tags), tg_username)
                 tg_msg.reply_text("Ok.")
         except NoStickerError as e:
@@ -203,9 +202,9 @@ class StickfixBot:
         try:
             tg_user = update.effective_user
             tg_user_id = str(tg_user.id)
-            # TODO -cFeature -v2.2 : Pedir confirmación al usuario  —Ignacio.
-            if tg_user_id in self._user_db:
-                self._user_db.delete_by_key(tg_user_id)
+            # TODO -cAdd -v2.2 : Pedir confirmación al usuario  —Ignacio.
+            if tg_user_id in self.user_db:
+                self.user_db.delete_by_key(tg_user_id)
                 self._logger.info("User %s was removed from the database", tg_user.username)
                 update.message.reply_text("Ok.")
             else:
@@ -236,9 +235,9 @@ class StickfixBot:
                 tg_msg.reply_text("You need to give me at least 1 tag to search for stickers.")
                 raise InputError(err_message="Command /get called by user " + tg_username + " raised an exception.",
                                  err_cause="Not enough arguments.")
-            sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
-                else self._user_db.get_item('SF-PUBLIC')
-
+            sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db \
+                else self.user_db.get_item('SF-PUBLIC')
+            
             sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
             for file_id in sticker_list:
                 try:
@@ -256,6 +255,21 @@ class StickfixBot:
             self._notify_error(bot, e, "An unexpected exception occured while calling the /get command with "
                                        "parameters: " + ", ".join(args) + ".")
 
+    def cmd_get_db(self, bot, update):
+        """Sends a copy of the database via chat."""
+        try:
+            tg_msg = update.message
+            tg_user = update.effective_user
+            if tg_user.id not in self._admins:
+                tg_msg.reply_text("You have no permission to use this command. Please contact an admin.")
+                raise InsufficientPermissionsError(
+                    err_message="Command /getDB called by user " + str(tg_user.username) + " raised an exception.",
+                    err_cause="User " + str(tg_user.username) + " is not an admin.")
+            bot.send_document(chat_id=tg_user.id, document=open("stickfix-user-DB.dat", 'rb'))
+            bot.send_document(chat_id=tg_user.id, document=open("stickfix-user-DB.dir", 'rb'))
+        except Exception as e:
+            self._notify_error(bot, e, "An unexpected exception occured while calling the /getDB command.")
+            
     def cmd_help(self, bot, update):
         """Sends a message with help to the user."""
         try:
@@ -328,11 +342,11 @@ class StickfixBot:
                     err_cause="Wrong number of arguments.")
             tg_user_id = str(tg_user.id)
             # Se crea el usuario si no está en la BDD.
-            if tg_user_id not in self._user_db:
+            if tg_user_id not in self.user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
 
-            user = self._user_db.get_item(tg_user_id)
+            user = self.user_db.get_item(tg_user_id)
             if args[0].upper() == 'PRIVATE':
                 user.private_mode = StickfixUser.ON
                 self._logger.info("User %s changed to private mode", tg_user.username)
@@ -346,7 +360,7 @@ class StickfixBot:
                 raise InputError(
                     err_cause=args[0] + " is not a valid argument.",
                     err_message="Command /setMode called by user " + tg_user.username + " raised an exception.")
-            self._user_db.add_item(user.id, user)
+            self.user_db.add_item(user.id, user)
             update.message.reply_text("Ok.")
         except InputError as e:
             self._log_error(e)
@@ -376,11 +390,11 @@ class StickfixBot:
                     err_cause="Wrong number of arguments.")
             tg_user_id = str(tg_user.id)
             # Se crea el usuario si no está en la BDD.
-            if tg_user_id not in self._user_db:
+            if tg_user_id not in self.user_db:
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
 
-            user = self._user_db.get_item(tg_user_id)
+            user = self.user_db.get_item(tg_user_id)
             if args[0].upper() == 'ON':
                 user._shuffle = StickfixUser.ON
                 self._logger.info("User %s turned on the shuffle mode", tg_user.username)
@@ -394,7 +408,7 @@ class StickfixBot:
                 raise InputError(
                     err_cause=args[0] + " is not a valid argument.",
                     err_message="Command /shuffle called by user " + tg_user.username + " raised an exception.")
-            self._user_db.add_item(user.id, user)
+            self.user_db.add_item(user.id, user)
             update.message.reply_text("Ok.")
         except InputError as e:
             self._log_error(e)
@@ -410,8 +424,8 @@ class StickfixBot:
             tg_user = update.effective_user
             tg_user_id = str(tg_user.id)
             update.message.reply_sticker('CAADBAADTAADqAABTgXzVqN6dJUIXwI')
-            if tg_user_id not in self._user_db:
-                # TODO -cFeature -v2.2 : Se debería preguntar al usuario si desea ser añadido a la BDD  —Ignacio.
+            if tg_user_id not in self.user_db:
+                # TODO -cAdd -v2.2 : Se debería preguntar al usuario si desea ser añadido a la BDD  —Ignacio.
                 self._logger.info("User %s was added to the database", tg_user.username)
                 self._create_user(tg_user_id)
         except TelegramError as e:
@@ -428,9 +442,9 @@ class StickfixBot:
             tg_inline = update.inline_query
             tg_query = tg_inline.query
             tg_user_id = str(update.effective_user.id)
-            sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db \
-                else self._user_db.get_item('SF-PUBLIC')
-
+            sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db \
+                else self.user_db.get_item('SF-PUBLIC')
+            
             offset = 0 if not tg_inline.offset else int(tg_inline.offset)
             tags = str(tg_query).split(" ")
             
@@ -441,7 +455,7 @@ class StickfixBot:
                     if sf_user.private_mode == StickfixUser.ON:
                         tags = sf_user.random_tag()
                     else:
-                        tags = self._user_db.get_item('SF-PUBLIC').random_tag()
+                        tags = self.user_db.get_item('SF-PUBLIC').random_tag()
                     display_title = "Showing stickers in: " + tags[0] if len(tags) != 0 \
                         else "I have no stickers to show you, try adding your own"
                     results.append(
@@ -464,7 +478,7 @@ class StickfixBot:
                 self._notify_error(bot, e,
                                    "An exception occured while trying to get inline results with tags: <code> " +
                                    " ".join(tags) + "</code>")
-            self._user_db.add_item(sf_user.id, sf_user)
+            self.user_db.add_item(sf_user.id, sf_user)
         except Exception as e:
             self._notify_error(bot, e,
                                "An unexpected exception occured while calling inline mode with query: <code>" +
@@ -473,11 +487,11 @@ class StickfixBot:
     def _on_inline_result(self, bot, update):
         try:
             tg_user_id = str(update.effective_user.id)
-            sf_user = self._user_db.get_item(tg_user_id)
+            sf_user = self.user_db.get_item(tg_user_id)
             if not sf_user:
-                sf_user = self._user_db.get_item('SF-PUBLIC')
+                sf_user = self.user_db.get_item('SF-PUBLIC')
             sf_user.remove_cached_stickers(tg_user_id)
-            self._user_db.add_item(sf_user.id, sf_user)
+            self.user_db.add_item(sf_user.id, sf_user)
             self._logger.info("Answered inline query for %s.", update.chosen_inline_result.query)
         except TelegramError as e:
             raise e
@@ -487,7 +501,7 @@ class StickfixBot:
     # endregion
 
     # region Job queue callbacks
-    def _periodic_backup(self, bot, job):
+    def periodic_backup(self, bot, job):
         """Creates a backup of the database periodically."""
         try:
             copyfile(src="stickfix-user-DB.dat", dst="stickfix-user-DB-bk" + str(self._current_backup_id) + ".dat")
@@ -499,10 +513,20 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "There was an unexpected error while trying to make the periodic backup.")
 
-    def _periodic_database_check(self, bot, job):
+    def periodic_cache_remove(self, bot, job):
+        """Periodically clears the cache."""
+        try:
+            for user_id in self.user_db.get_keys():
+                user = self.user_db.get_item(user_id)
+                user.cached_stickers = {}
+                self.user_db.add_item(user_id, user)
+        except Exception as e:
+            self._notify_error(bot, e, "There was an unexpected error while trying to do periodic cache removal.")
+
+    def periodic_database_check(self, bot, job):
         """Checks for database integrity."""
         try:
-            if self._user_db.is_empty() and not self._empty_db:
+            if self.user_db.is_empty() and not self._empty_db:
                 last_backup = str((self._current_backup_id - 1) % 2)
 
                 copyfile(src="stickfix-user-DB-bk" + last_backup + ".dat", dst="stickfix-user-DB.dat")
@@ -514,22 +538,22 @@ class StickfixBot:
         except Exception as e:
             self._notify_error(bot, e, "There was an unexpected error during automatic database check.")
 
+    # endregion
+    
     def _contact_admins(self, bot, message):
         """Sends a message to all admin users."""
         for admin_id in self._admins:
             bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.HTML)
 
-    # endregion
-
     def _delete_from(self, update, tg_user, args, sticker_id=None):
         tg_user_id = str(tg_user.id)
-        sf_user = self._user_db.get_item(tg_user_id) if tg_user_id in self._user_db else None
+        sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db else None
         if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
             # Si el usuario no existe o está en modo público, se considera el usuario como `SF-PUBLIC`
-            sf_user = self._user_db.get_item('SF-PUBLIC')
+            sf_user = self.user_db.get_item('SF-PUBLIC')
         sticker_id = update.effective_message.reply_to_message.sticker.file_id if sticker_id is None else sticker_id
         sf_user.remove_sticker(sticker_id=sticker_id, sticker_tags=args)
-        self._user_db.add_item(sf_user.id, sf_user)
+        self.user_db.add_item(sf_user.id, sf_user)
         self._logger.info("Sticker deleted from %s's pack with tags: " + ', '.join(args), tg_user.username)
     
     def _create_user(self, user_id):
@@ -540,7 +564,7 @@ class StickfixBot:
             ID of the user to be created.
         """
         user = StickfixUser(user_id)
-        self._user_db.add_item(user_id, user)
+        self.user_db.add_item(user_id, user)
         return user
     
     def _error_callback(self, bot, update, error):
@@ -579,7 +603,7 @@ class StickfixBot:
         for tag in tags:
             match = set()
             if sf_user.private_mode == StickfixUser.OFF:
-                match = self._user_db.get_item('SF-PUBLIC').get_stickers(sticker_tag=tag)
+                match = self.user_db.get_item('SF-PUBLIC').get_stickers(sticker_tag=tag)
             stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
         sticker_list = list(set.intersection(*stickers))
         if shuffle:
