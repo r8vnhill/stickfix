@@ -5,6 +5,7 @@
 
 import logging
 import random
+from logging.handlers import RotatingFileHandler
 from shutil import copyfile
 from traceback import format_exc
 from uuid import uuid4
@@ -18,7 +19,7 @@ from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerErr
 from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.1"
+__version__ = "2.1.001"
 
 # TODO -cAdd -v2.2 : Implementar comando `/addSet`.
 # Revisar http://python-telegram-bot.readthedocs.io/en/stable/telegram.html `get_sticker_set`   —Ignacio.
@@ -60,11 +61,11 @@ class StickfixBot:
         :param admins:
             List containing the id's of the users with admin privilege.
         """
-        logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+        self._logger = logging.getLogger("stickfix")
+        self.setup_logger()
         self._admins = admins
         self._current_backup_id = 0
         self.user_db = ShelveDB("stickfix-user-DB")
-        self._logger = logging.getLogger(__name__)
         self._empty_db = False  # Indica si se borró la bdd manualmente.
         
         self._updater = Updater(token)
@@ -90,6 +91,15 @@ class StickfixBot:
         self.dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
         # endregion
         self.dispatcher.add_error_handler(self._error_callback)  # Para logging de errores.
+
+    def setup_logger(self):
+        """
+        Sets up a rottating logger.
+        """
+        self._logger.setLevel(logging.INFO)
+        log_file_handler = RotatingFileHandler(filename='stickfix.log', maxBytes=50000, backupCount=1)
+        log_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        self._logger.addHandler(log_file_handler)
     
     def run(self):
         """
@@ -159,6 +169,10 @@ class StickfixBot:
         """
         Deletes a sticker from the database.
         
+        :param bot:
+            Not used.
+        :param update:
+            Not used.
         :param args:
             List with the tags from which the sticker is going to be removed.
         """
