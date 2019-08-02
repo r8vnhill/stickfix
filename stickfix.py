@@ -308,10 +308,10 @@ class StickfixBot:
                     err_message="Command /getDB called by user " + str(
                         tg_user.username) + " raised an exception.",
                     err_cause="User " + str(tg_user.username) + " is not an admin.")
-            bot.send_document(chat_id=tg_user.id,
-                              document=open("stickfix-user-DB.dat", 'rb+'))
-            bot.send_document(chat_id=tg_user.id,
-                              document=open("stickfix-user-DB.dir", 'rb+'))
+            with open("stickfix-user-DB.dat", 'rb+') as db_dat:
+                bot.send_document(chat_id=tg_user.id, document=db_dat)
+            with open("stickfix-user-DB.dir", 'rb+') as db_dir:
+                bot.send_document(chat_id=tg_user.id, document=db_dir)
         except Exception as e:
             self._notify_error(bot, e,
                                "An unexpected exception occured while calling the /getDB command.")
@@ -570,6 +570,9 @@ class StickfixBot:
             self._logger.info(
                 "Created backup file stickfix-user-DB-bk" + str(self._current_backup_id))
             self._current_backup_id = (self._current_backup_id + 1) % 2
+        except FileNotFoundError as e:
+            self._notify_error(bot, e,
+                               "There was an unexpected error while trying to make the periodic backup.")
         except TelegramError as e:
             raise e
         except Exception as e:
@@ -652,6 +655,8 @@ class StickfixBot:
             self._logger.error(e.message + ". " + " | ".join(e.args))
         except TelegramError as e:
             self._logger.error(e.message + ". " + " | ".join(e.args))
+        except FileNotFoundError as e:
+            self._logger.error(e.filename)
 
     def _get_sticker_list(self, sf_user, tags, user_id, shuffle=False):
         """
