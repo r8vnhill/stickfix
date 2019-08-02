@@ -274,3 +274,6 @@ $RECYCLE.BIN/
 *.bak
 *.dat
 *.dir
+
+bot.py
+*.log*
