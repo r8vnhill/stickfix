@@ -695,7 +695,7 @@ class StickfixBot:
     def _notify_error(self, bot, error, message, cause=None):
         """Logs and notifies admins about errors."""
         if cause is None:
-            cause = " | ".join(error.args)
+            cause = " | ".join(str(x) for x in error.args)
         self._contact_admins(bot,
                              message + " | " + cause + " | Details: \n <code>" + format_exc() + "</code>")
         self._logger.error(
