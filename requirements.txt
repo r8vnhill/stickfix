@@ -1,2 +1,3 @@
+pytest
 telegram
 python-telegram-bot
