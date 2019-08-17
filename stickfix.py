@@ -152,9 +152,9 @@ class StickfixBot:
             tg_user_id = str(tg_user.id)
             if tg_reply_to is None:  # Si no se responde a ningún mensaje.
                 tg_msg.reply_text(
-                    "To add a sticker to the database, you need to *reply to a message* containing the sticker you "
-                    "want to add.",
-                    parse_mode=ParseMode.HTML)
+                    "To add a sticker to the database, you need to *reply to a message* " 
+                    "containing the sticker you want to add.",
+                    parse_mode=ParseMode.MARKDOWN)
                 raise NoStickerError(
                     err_message="Command /add called by user " +
                     tg_user.username + " raised an exception.",
