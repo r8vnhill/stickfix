@@ -11,7 +11,7 @@ __version__ = "2.0.1"
 class StickfixUser:
     OFF = False
     ON = True
-    
+
     def __init__(self, user_id):
         """
         Creates a StickfixBot user with default values.
@@ -24,7 +24,7 @@ class StickfixUser:
         self.cached_stickers = {}
         self.private_mode = self.OFF
         self._shuffle = self.OFF
-    
+
     def add_sticker(self, sticker_id, sticker_tags):
         """
         Adds a sticker to the database with the specified tags.
@@ -45,7 +45,7 @@ class StickfixUser:
                 else:
                     aux = [sticker_id]
                 self.stickers[tag] = sorted(aux)
-    
+
     def get_stickers(self, sticker_tag):
         """
         Gets all stickers from the database that matches the tag.
@@ -65,13 +65,14 @@ class StickfixUser:
         if len(tag_list) == 0:
             return []
         return [random.choice(tag_list)]
-        
+
     def remove_cached_stickers(self, user_id=None):
         """
         Removes the cached stickers for the user.
         
         :param user_id:
-            Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for other users.
+            Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for
+            other users.
         """
         if user_id in self.cached_stickers:
             del self.cached_stickers[user_id]
