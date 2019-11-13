@@ -495,7 +495,7 @@ class StickfixBot:
             tg_inline = update.inline_query
             tg_query = tg_inline.query
             tg_user_id = str(update.effective_user.id)
-            sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db \
+            sf_user: StickfixUser = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db \
                 else self.user_db.get_item('SF-PUBLIC')
 
             offset = 0 if not tg_inline.offset else int(tg_inline.offset)
