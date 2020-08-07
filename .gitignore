@@ -277,3 +277,4 @@ $RECYCLE.BIN/
 
 bot.py
 *.log*
+secret.yml
