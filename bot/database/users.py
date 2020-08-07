@@ -4,6 +4,10 @@
 """
 import random
 
+__author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
+__version__ = "2.0.1"
+
+
 class StickfixUser:
     OFF = False
     ON = True
@@ -86,7 +90,3 @@ class StickfixUser:
                 self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
-
-    def to_dict(self):
-        return { "shuffle": self._shuffle, "private": self.private_mode,
-                 "stickers": self.stickers }

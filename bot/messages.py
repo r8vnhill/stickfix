@@ -8,7 +8,6 @@
 import json
 
 from telegram import Message, Update
-from telegram.ext import CallbackContext
 
 from bot.logger import StickfixLogger
 
@@ -22,8 +21,3 @@ def get_message_content(update: Update):
         f"Received message: \n {json.dumps(message_content.to_dict(), indent=2, sort_keys=True)}")
     return message_content
 
-
-def send_hello_message(update: Update, context: CallbackContext):
-    """ Answers the /start command with a hello sticker """
-    chat_id = update.effective_chat.id
-    context.bot.send_sticker(chat_id, sticker='CAADBAADTAADqAABTgXzVqN6dJUIXwI')

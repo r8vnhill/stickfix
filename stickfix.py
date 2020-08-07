@@ -17,10 +17,10 @@ from telegram.error import BadRequest, ChatMigrated, NetworkError, TelegramError
 from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryHandler, \
     Updater
 
-from db.sf_database import ShelveDB
+from bot.database.storage import StickfixDB
+from bot.database.users import StickfixUser
 from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerError, \
     WrongContextError
-from sf_user import StickfixUser
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "2.1.001"
@@ -75,7 +75,7 @@ class StickfixBot:
         self.setup_logger()
         self._admins = admins
         self._current_backup_id = 0
-        self.user_db = ShelveDB("stickfix-user-DB")
+        self.user_db = StickfixDB("stickfix-user-DB")
         self._empty_db = False  # Indica si se borró la bdd manualmente.
 
         self._updater = Updater(token)

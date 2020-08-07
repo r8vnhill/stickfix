@@ -1,14 +1,11 @@
-from pymongo import MongoClient
+import yaml
 
-client = MongoClient("localhost", 22)
+from bot.database.storage import StickfixDB
 
-db = client["test_db"]
-
-posts = db.posts
-post_data = {
-    'title': 'Python and MongoDB',
-    'content': 'PyMongo is fun, you guys',
-    'author': 'Scott'
-}
-result = posts.insert_one(post_data)
-print('One post: {0}'.format(result.inserted_id))
+if __name__ == "__main__":
+    db = StickfixDB("stickfix-user-DB")
+    users = { }
+    for usr_id in db.get_keys():
+        users[usr_id] = db.get_item(usr_id).to_dict()
+    with open("data/users.yaml", "w") as fp:
+        yaml.dump(users, fp, yaml.Dumper)
