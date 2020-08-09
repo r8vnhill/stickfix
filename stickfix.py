@@ -19,7 +19,7 @@ from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryH
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser
-from sf_exceptions import InputError, InsufficientPermissionsError, NoStickerError, \
+from bot.utils.errors import InputError, InsufficientPermissionsError, NoStickerError, \
     WrongContextError
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"

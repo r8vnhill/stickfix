@@ -21,8 +21,8 @@ class StickfixLogger:
         console_logger.setFormatter(
             logging.Formatter('%(levelname)s:%(name)s:%(message)s'))
         self.__logger.addHandler(console_logger)
-        file_logger = RotatingFileHandler(filename='logs/stickfix.log', maxBytes=50000,
-                                          backupCount=2)
+        file_logger = RotatingFileHandler(filename='logs/stickfix.log', encoding="utf-8",
+                                          maxBytes=50000, backupCount=2)
         file_logger.setLevel(logging.INFO)
         file_logger.setFormatter(
             logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -35,3 +35,11 @@ class StickfixLogger:
     def info(self, msg: str) -> None:
         """ Logs a message with info level.    """
         self.__logger.info(msg)
+
+    def error(self, msg: str) -> None:
+        """ Logs a message with error level.    """
+        self.__logger.error(msg)
+
+    def critical(self, msg: str) -> None:
+        """ Logs a message with error level.    """
+        self.__logger.critical(msg)

@@ -7,12 +7,17 @@
 """
 from typing import List
 
-from telegram import Update
+from telegram import Message, Sticker, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser
-from bot.logger import StickfixLogger
+from bot.utils.errors import NoStickerError
+from bot.utils.logger import StickfixLogger
+from bot.utils.messages import Commands, check_reply, check_sticker
+
+SF_PUBLIC = "SF-PUBLIC"
+USERS_DB = "users"
 
 
 class Stickfix:
@@ -39,7 +44,7 @@ class Stickfix:
         self.__admins = admins
         self.__dispatcher = self.__updater.dispatcher
         self.__setup_handlers()
-        self.__user_db = StickfixDB("stickfix-user-DB")
+        self.__user_db = StickfixDB(USERS_DB)
 
     def run(self) -> None:
         """ Runs the bot.   """
@@ -52,7 +57,8 @@ class Stickfix:
         self.__updater = Updater(token, use_context=True)
 
     def __setup_handlers(self):
-        self.__dispatcher.add_handler(CommandHandler("start", self.__send_hello_message))
+        self.__dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
+        self.__dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -62,7 +68,43 @@ class Stickfix:
             self.__create_user(chat_id)
             self.__logger.info(f"User {chat_id} was added to the database.")
 
+    def __add_sticker(self, update: Update, context: CallbackContext) -> None:
+        """ Ansters the /add command by adding a sticker to the DB. """
+        sticker: Sticker
+        try:
+            if SF_PUBLIC not in self.__user_db:
+                self.__create_user(SF_PUBLIC)
+                self.__logger.info(f"Created {SF_PUBLIC} user.")
+            msg: Message = update.effective_message
+            reply_to: Message = msg.reply_to_message
+            check_reply(reply_to, msg)
+            sticker = reply_to.sticker
+            check_sticker(sticker, msg)
+            emoji = [sticker.emoji] if sticker.emoji else []
+            tags = context.args if context.args else emoji
+            self.__link_tags(sticker, tags, msg)
+        except NoStickerError:
+            self.__logger.debug("Handled error.")
+        except Exception as e:
+            self.__unexpected_error(e)
+
     def __create_user(self, chat_id: str) -> None:
         """ Creates and adds a user to the database.    """
-        user = StickfixUser(chat_id)
-        self.__user_db.add_item(chat_id, user)
+        self.__user_db[chat_id] = StickfixUser(chat_id)
+
+    def __unexpected_error(self, e: Exception):
+        """ Logs an unhandled exception.    """
+        self.__logger.critical("Unexpected error")
+        self.__logger.critical(str(type(e)))
+        self.__logger.critical(str(e.args))
+
+    def __link_tags(self, sticker: Sticker, tags: List[str], origin: Message):
+        """ Links a list of tags with a sticker.    """
+        if tags:
+            user_id = origin.from_user.id
+            user = self.__user_db[user_id] if user_id in self.__user_db else self.__user_db[
+                SF_PUBLIC]
+            effective_user = user if user.private_mode else self.__user_db[SF_PUBLIC]
+            effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
+            self.__user_db[user_id] = effective_user
+        origin.reply_text("Ok!")

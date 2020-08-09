@@ -7,6 +7,10 @@ import random
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "2.0.1"
 
+from bot.utils.logger import StickfixLogger
+
+logger = StickfixLogger(__name__)
+
 
 class StickfixUser:
     OFF = False
@@ -45,6 +49,7 @@ class StickfixUser:
                 else:
                     aux = [sticker_id]
                 self.stickers[tag] = sorted(aux)
+        logger.info(f"Sticker added to {self.id} pack with tags: {', '.join(sticker_tags)}")
 
     def get_stickers(self, sticker_tag):
         """
