@@ -7,14 +7,14 @@
 """
 from typing import List
 
-from telegram import Chat, Message, ParseMode, Sticker, Update
+from telegram import Message, Sticker, Update, User
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser
 from bot.utils.errors import NoStickerError
 from bot.utils.logger import StickfixLogger
-from bot.utils.messages import Commands, check_reply, check_sticker
+from bot.utils.messages import Commands, check_reply, check_sticker, send_help_message
 
 SF_PUBLIC = "SF-PUBLIC"
 USERS_DB = "users"
@@ -60,6 +60,7 @@ class Stickfix:
         self.__dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
         self.__dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker))
         self.__dispatcher.add_handler(CommandHandler(Commands.HELP, self.__send_help_message))
+        self.__dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -90,14 +91,25 @@ class Stickfix:
             self.__unexpected_error(e)
 
     def __send_help_message(self, update: Update, context: CallbackContext) -> None:
-        chat: Chat
+        """ Sends a help message to the chat.   """
         try:
-            chat = update.effective_chat
-            chat_id = chat.id
-            with open("bot/utils/HELP.md", "r") as help_file:
-                context.bot.send_message(chat_id=chat_id, text=help_file.read(),
-                                         parse_mode=ParseMode.MARKDOWN)
-            self.__logger.info(f"Sent help message to {chat.username}.")
+            send_help_message(update, context)
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    # noinspection PyUnusedLocal
+    def __remove_user(self, update: Update, context: CallbackContext) -> None:
+        """ Removes a user from the database.   """
+        user: User
+        message: Message
+        try:
+            message = update.effective_message
+            user = update.effective_user
+            user_id = user.id
+            if user_id in self.__user_db:
+                del self.__user_db[user_id]
+                self.__logger.info(f"User {user_id} was removed from the database.")
+                message.reply_text("Sure!")
         except Exception as e:
             self.__unexpected_error(e)
 

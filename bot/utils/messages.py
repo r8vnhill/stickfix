@@ -9,7 +9,8 @@ import json
 from enum import Enum
 from typing import Union
 
-from telegram import Message, Sticker, Update, User
+from telegram import Message, ParseMode, Sticker, Update, User
+from telegram.ext import CallbackContext
 
 from bot.utils.errors import NoStickerError
 from bot.utils.logger import StickfixLogger
@@ -45,6 +46,16 @@ def check_sticker(sticker: Union[Sticker, None], message: Message):
                                cause="The command didn't reply to a sticker")
 
 
+def send_help_message(update: Update, context: CallbackContext):
+    """ Sends a help message to a user  """
+    chat = update.effective_chat
+    chat_id = chat.id
+    with open("bot/utils/HELP.md", "r") as help_file:
+        context.bot.send_message(chat_id=chat_id, text=help_file.read(),
+                                 parse_mode=ParseMode.MARKDOWN)
+    module_logger.info(f"Sent help message to {chat.username}.")
+
+
 def add_error_msg(user: str) -> str:
     return f"Command /add called by user {user} raised an exception."
 
@@ -60,3 +71,4 @@ class Commands(str, Enum):
     START = "start"
     ADD = "add"
     HELP = "help"
+    DELETE_ME = "deleteMe"
