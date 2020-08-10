@@ -2,6 +2,7 @@
 
 ## Version 2.2
 
+- [B.7] Updated ``/setMode`` command to the new API version
 - [B.6] Updated ``/deleteMe`` command to the new API version
 - [B.5] Updated ``/help`` command to the new API version
 - [B.4] Updated ``/add`` command to new API version

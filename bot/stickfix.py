@@ -11,10 +11,11 @@ from telegram import Message, Sticker, Update, User
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
-from bot.database.users import StickfixUser
-from bot.utils.errors import NoStickerError
+from bot.database.users import StickfixUser, UserModes
+from bot.utils.errors import InputError, NoStickerError
 from bot.utils.logger import StickfixLogger
-from bot.utils.messages import Commands, check_reply, check_sticker, send_help_message
+from bot.utils.messages import Commands, check_reply, check_sticker, raise_input_error, \
+    send_help_message
 
 SF_PUBLIC = "SF-PUBLIC"
 USERS_DB = "users"
@@ -58,9 +59,11 @@ class Stickfix:
 
     def __setup_handlers(self):
         self.__dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
-        self.__dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker))
+        self.__dispatcher.add_handler(
+            CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True))
         self.__dispatcher.add_handler(CommandHandler(Commands.HELP, self.__send_help_message))
         self.__dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
+        self.__dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -71,7 +74,7 @@ class Stickfix:
             self.__logger.info(f"User {chat_id} was added to the database.")
 
     def __add_sticker(self, update: Update, context: CallbackContext) -> None:
-        """ Ansters the /add command by adding a sticker to the DB. """
+        """ Answers the /add command by adding a sticker to the DB. """
         sticker: Sticker
         try:
             if SF_PUBLIC not in self.__user_db:
@@ -110,6 +113,35 @@ class Stickfix:
                 del self.__user_db[user_id]
                 self.__logger.info(f"User {user_id} was removed from the database.")
                 message.reply_text("Sure!")
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    def __set_mode(self, update: Update, context: CallbackContext) -> None:
+        """ Sets a user mode to private or public.   """
+        user: User
+        message: Message
+        try:
+            message = update.effective_message
+            if context.args:
+                user = update.effective_user
+                user_id = user.id
+                if user_id not in self.__user_db:
+                    self.__create_user(user_id)
+                mode = context.args[0].upper()
+                sf_user = self.__user_db[user_id]
+                if mode == UserModes.PRIVATE or mode == UserModes.PUBLIC:
+                    sf_user.private_mode = mode == UserModes.PRIVATE
+                    message.reply_text("Leave it to me!")
+                    self.__logger.info(f"Changed {user.username} to {mode} mode.")
+                else:
+                    message.reply_markdown(
+                        "Sorry, I didn't understand. This command syntax is `/setMode private` "
+                        "or `setMode public`.")
+                    raise_input_error(cause=f"{mode} is not a valid argument.",
+                                      msg=f"Command /setMode called by user {user.username} "
+                                          f"raised an exception.")
+        except InputError:
+            self.__logger.debug("Handled exception.")
         except Exception as e:
             self.__unexpected_error(e)
 

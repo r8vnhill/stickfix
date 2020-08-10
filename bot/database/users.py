@@ -7,9 +7,16 @@ import random
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "2.0.1"
 
+from enum import Enum
+
 from bot.utils.logger import StickfixLogger
 
 logger = StickfixLogger(__name__)
+
+
+class UserModes(str, Enum):
+    PRIVATE = "PRIVATE"
+    PUBLIC = "PUBLIC"
 
 
 class StickfixUser:

@@ -87,11 +87,6 @@ class StickfixBot:
                                      first=1800)
         self.job_queue.run_repeating(self.periodic_cache_remove, interval=259200, first=0)
 
-        # region Handlers
-        self.dispatcher.add_handler(CommandHandler("start", self.cmd_start))
-        self.dispatcher.add_handler(CommandHandler("help", self.cmd_help))
-        self.dispatcher.add_handler(CommandHandler("deleteMe", self.cmd_delete_user))
-        self.dispatcher.add_handler(CommandHandler("getDB", self.cmd_get_db))
         self.dispatcher.add_handler(
             CommandHandler("setMode", self.cmd_set_mode, pass_args=True))
         self.dispatcher.add_handler(CommandHandler("add", self.cmd_add, pass_args=True))
@@ -244,26 +239,6 @@ class StickfixBot:
                                "command with "
                                "parameters: " + ", ".join(args) + ".")
 
-    def cmd_delete_user(self, bot, update):
-        """Deletes the user who sent the command from the database."""
-        try:
-            tg_user = update.effective_user
-            tg_user_id = str(tg_user.id)
-            # TODO -cAdd -v2.2 : Pedir confirmación al usuario  —Ignacio.
-            if tg_user_id in self.user_db:
-                self.user_db.delete_by_key(tg_user_id)
-                self._logger.info("User %s was removed from the database",
-                                  tg_user.username)
-                update.message.reply_text("Ok.")
-            else:
-                update.message.reply_text("You're not in my database.")
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /deleteMe "
-                               "command.")
-
     def cmd_get(self, bot, update, args):
         """
         Sends all the stickers of linked with a tag. For debug purposes mainly.
@@ -311,44 +286,6 @@ class StickfixBot:
                                "An unexpected exception occured while calling the /get command "
                                "with "
                                "parameters: " + ", ".join(args) + ".")
-
-    def cmd_get_db(self, bot, update):
-        """Sends a copy of the database via chat."""
-        try:
-            tg_msg = update.message
-            tg_user = update.effective_user
-            if tg_user.id not in self._admins:
-                tg_msg.reply_text(
-                    "You have no permission to use this command. Please contact an admin.")
-                raise InsufficientPermissionsError(
-                    err_message="Command /getDB called by user " + str(
-                        tg_user.username) + " raised an exception.",
-                    err_cause="User " + str(tg_user.username) + " is not an admin.")
-            with open("stickfix-user-DB.dat", 'rb+') as db_dat:
-                bot.send_document(chat_id=tg_user.id, document=db_dat)
-            with open("stickfix-user-DB.dir", 'rb+') as db_dir:
-                bot.send_document(chat_id=tg_user.id, document=db_dir)
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /getDB command.")
-
-    def cmd_help(self, bot, update):
-        """Sends a message with help to the user."""
-        try:
-            bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=HELP_MESSAGE[0],
-                parse_mode=ParseMode.MARKDOWN)
-            bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=HELP_MESSAGE[1],
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /help command.")
 
     def cmd_restore(self, bot, update, args):
         """
