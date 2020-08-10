@@ -7,7 +7,7 @@
 """
 from typing import List
 
-from telegram import Message, Sticker, Update
+from telegram import Chat, Message, ParseMode, Sticker, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
@@ -59,6 +59,7 @@ class Stickfix:
     def __setup_handlers(self):
         self.__dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
         self.__dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker))
+        self.__dispatcher.add_handler(CommandHandler(Commands.HELP, self.__send_help_message))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -85,6 +86,18 @@ class Stickfix:
             self.__link_tags(sticker, tags, msg)
         except NoStickerError:
             self.__logger.debug("Handled error.")
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    def __send_help_message(self, update: Update, context: CallbackContext) -> None:
+        chat: Chat
+        try:
+            chat = update.effective_chat
+            chat_id = chat.id
+            with open("bot/utils/HELP.md", "r") as help_file:
+                context.bot.send_message(chat_id=chat_id, text=help_file.read(),
+                                         parse_mode=ParseMode.MARKDOWN)
+            self.__logger.info(f"Sent help message to {chat.username}.")
         except Exception as e:
             self.__unexpected_error(e)
 

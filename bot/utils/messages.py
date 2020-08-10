@@ -59,3 +59,4 @@ def raise_no_sticker_error(msg: str, cause: str):
 class Commands(str, Enum):
     START = "start"
     ADD = "add"
+    HELP = "help"
