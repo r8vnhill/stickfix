@@ -87,9 +87,6 @@ class StickfixBot:
                                      first=1800)
         self.job_queue.run_repeating(self.periodic_cache_remove, interval=259200, first=0)
 
-        self.dispatcher.add_handler(
-            CommandHandler("setMode", self.cmd_set_mode, pass_args=True))
-        self.dispatcher.add_handler(CommandHandler("add", self.cmd_add, pass_args=True))
         self.dispatcher.add_handler(CommandHandler('get', self.cmd_get, pass_args=True))
         self.dispatcher.add_handler(
             CommandHandler("shuffle", self.cmd_set_shuffle, pass_args=True))
@@ -327,62 +324,6 @@ class StickfixBot:
             self._notify_error(bot, e,
                                "An unexpected exception occured while calling the /deleteMe "
                                "command.")
-
-    def cmd_set_mode(self, bot, update, args):
-        """
-        Changes the user mode to `PUBLIC` or `PRIVATE`.
-        By default all users are in `PUBLIC` mode.
-        
-        :param args:
-             Desired mode. Can be `public` or `private`. Ignores case.
-        """
-        try:
-            tg_user = update.effective_user
-            if len(args) != 1:
-                update.message.reply_text(
-                    "Sorry, this command only accepts 1 parameter. Send <code>/setMode "
-                    "private</code> or "
-                    "<code>/setMode public</code>.",
-                    parse_mode=ParseMode.HTML)
-                raise InputError(
-                    err_message="Command /setMode called by user " + tg_user.username + " raised "
-                                                                                        "an "
-                                                                                        "exception.",
-                    err_cause="Wrong number of arguments.")
-            tg_user_id = str(tg_user.id)
-            # Se crea el usuario si no está en la BDD.
-            if tg_user_id not in self.user_db:
-                self._logger.info("User %s was added to the database", tg_user.username)
-                self._create_user(tg_user_id)
-
-            user = self.user_db.get_item(tg_user_id)
-            if args[0].upper() == 'PRIVATE':
-                user.private_mode = StickfixUser.ON
-                self._logger.info("User %s changed to private mode", tg_user.username)
-            elif args[0].upper() == 'PUBLIC':
-                user.private_mode = StickfixUser.OFF
-                self._logger.info("User %s changed to public mode", tg_user.username)
-            else:
-                update.message.reply_text(
-                    "Sorry, I didn't understand. Send <code>/setMode private</code> or "
-                    "<code>/setMode public</code>.",
-                    parse_mode=ParseMode.HTML)
-                raise InputError(
-                    err_cause=args[0] + " is not a valid argument.",
-                    err_message="Command /setMode called by user " + tg_user.username + " raised "
-                                                                                        "an "
-                                                                                        "exception.")
-            self.user_db.add_item(user.id, user)
-            update.message.reply_text("Ok.")
-        except InputError as e:
-            self._log_error(e)
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /setMode "
-                               "command with "
-                               "parameters: " + ", ".join(args) + ".")
 
     def cmd_set_shuffle(self, bot, update, args):
         """

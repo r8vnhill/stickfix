@@ -12,10 +12,12 @@ from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser, UserModes
-from bot.utils.errors import InputError, NoStickerError
+from bot.utils.errors import InputError, NoStickerError, WrongContextError
 from bot.utils.logger import StickfixLogger
-from bot.utils.messages import Commands, check_reply, check_sticker, raise_input_error, \
-    send_help_message
+from bot.utils.messages import Commands, check_reply, check_sticker, \
+    get_message_meta, \
+    raise_input_error, \
+    raise_wrong_context_error, send_help_message
 
 SF_PUBLIC = "SF-PUBLIC"
 USERS_DB = "users"
@@ -64,6 +66,8 @@ class Stickfix:
         self.__dispatcher.add_handler(CommandHandler(Commands.HELP, self.__send_help_message))
         self.__dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
         self.__dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
+        self.__dispatcher.add_handler(
+            CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -106,29 +110,27 @@ class Stickfix:
         user: User
         message: Message
         try:
+            message, user, chat = get_message_meta(update)
             message = update.effective_message
             user = update.effective_user
-            user_id = user.id
-            if user_id in self.__user_db:
-                del self.__user_db[user_id]
-                self.__logger.info(f"User {user_id} was removed from the database.")
+            user.id = user.id
+            if user.id in self.__user_db:
+                del self.__user_db[user.id]
+                self.__logger.info(f"User {user.id} was removed from the database.")
                 message.reply_text("Sure!")
         except Exception as e:
             self.__unexpected_error(e)
 
     def __set_mode(self, update: Update, context: CallbackContext) -> None:
         """ Sets a user mode to private or public.   """
-        user: User
-        message: Message
         try:
-            message = update.effective_message
+            message, user, chat = get_message_meta(update)
             if context.args:
-                user = update.effective_user
-                user_id = user.id
-                if user_id not in self.__user_db:
-                    self.__create_user(user_id)
+                user.id = user.id
+                if user.id not in self.__user_db:
+                    self.__create_user(user.id)
                 mode = context.args[0].upper()
-                sf_user = self.__user_db[user_id]
+                sf_user = self.__user_db[user.id]
                 if mode == UserModes.PRIVATE or mode == UserModes.PUBLIC:
                     sf_user.private_mode = mode == UserModes.PRIVATE
                     message.reply_text("Leave it to me!")
@@ -141,6 +143,25 @@ class Stickfix:
                                       msg=f"Command /setMode called by user {user.username} "
                                           f"raised an exception.")
         except InputError:
+            self.__logger.debug("Handled exception.")
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    def __get_stickers(self, update: Update, context: CallbackContext) -> None:
+        """ Sends all the stickers linked with a tag.   """
+        try:
+            message, user, chat = get_message_meta(update)
+            if chat.type != UserModes.PRIVATE:
+                message.reply_text("This command only works in private chats.")
+                raise_wrong_context_error(
+                    msg=f"Command /get called by user {user.username} raised an exception.",
+                    cause=f"Chat type is {chat.type}.")
+            sf_user = self.__user_db[user.id] if user.id in self.__user_db else self.__user_db[
+                SF_PUBLIC]
+            stickers = self.__get_sticker_list(sf_user, context.args)
+            for sticker_id in stickers:
+                chat.send_sticker(sticker_id)
+        except WrongContextError:
             self.__logger.debug("Handled exception.")
         except Exception as e:
             self.__unexpected_error(e)
@@ -163,5 +184,9 @@ class Stickfix:
                 SF_PUBLIC]
             effective_user = user if user.private_mode else self.__user_db[SF_PUBLIC]
             effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
-            self.__user_db[user_id] = effective_user
+            self.__user_db[user.id] = effective_user
         origin.reply_text("Ok!")
+
+    def __get_sticker_list(self, user: StickfixUser, tags: List[str]):
+        """ """
+        pass

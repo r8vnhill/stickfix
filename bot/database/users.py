@@ -15,8 +15,8 @@ logger = StickfixLogger(__name__)
 
 
 class UserModes(str, Enum):
-    PRIVATE = "PRIVATE"
-    PUBLIC = "PUBLIC"
+    PRIVATE = "private"
+    PUBLIC = "public"
 
 
 class StickfixUser:

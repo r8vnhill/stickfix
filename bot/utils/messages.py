@@ -7,12 +7,12 @@
 """
 import json
 from enum import Enum
-from typing import Callable, Union
+from typing import Callable, Tuple, Union
 
-from telegram import Message, ParseMode, Sticker, Update, User
+from telegram import Chat, Message, ParseMode, Sticker, Update, User
 from telegram.ext import CallbackContext
 
-from bot.utils.errors import InputError, NoStickerError
+from bot.utils.errors import InputError, NoStickerError, WrongContextError
 from bot.utils.logger import StickfixLogger
 
 module_logger = StickfixLogger(__name__)
@@ -68,11 +68,20 @@ def raise_input_error(msg: str, cause: str):
     raise_error(InputError, msg, cause)
 
 
+def raise_wrong_context_error(msg: str, cause: str) -> None:
+    raise_error(WrongContextError, msg, cause)
+
+
 def raise_error(constructor: Callable, msg: str, cause: str) -> None:
     error = constructor(err_message=msg, err_cause=cause)
     module_logger.error(error.message)
     module_logger.error(error.cause)
     raise error
+
+
+def get_message_meta(update: Update) -> Tuple[Message, User, Chat]:
+    """ Gets the metadata of a message. """
+    return update.effective_message, update.effective_user, update.effective_chat
 
 
 class Commands(str, Enum):
@@ -81,3 +90,4 @@ class Commands(str, Enum):
     HELP = "help"
     DELETE_ME = "deleteMe"
     SET_MODE = "setMode"
+    GET = "get"
