@@ -18,10 +18,14 @@ class UserModes(str, Enum):
     PRIVATE = "private"
     PUBLIC = "public"
 
+class Switch(str, Enum):
+    ON = "on"
+    OFF = "off"
 
 class StickfixUser:
     OFF = False
     ON = True
+    _shuffle: bool
 
     def __init__(self, user_id):
         """
@@ -33,8 +37,12 @@ class StickfixUser:
         self.id = user_id
         self.stickers = dict()
         self.cached_stickers = { }
-        self.private_mode = self.OFF
-        self._shuffle = self.OFF
+        self.private_mode = False
+        self._shuffle = False
+
+    @property
+    def shuffle(self) -> bool:
+        return self._shuffle
 
     def add_sticker(self, sticker_id, sticker_tags):
         """
@@ -102,3 +110,7 @@ class StickfixUser:
                 self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
+
+    @shuffle.setter
+    def shuffle(self, value):
+        self._shuffle = value

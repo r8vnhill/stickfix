@@ -91,3 +91,4 @@ class Commands(str, Enum):
     DELETE_ME = "deleteMe"
     SET_MODE = "setMode"
     GET = "get"
+    SHUFFLE = "shuffle"

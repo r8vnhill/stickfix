@@ -5,13 +5,15 @@
     You should have received a copy of the license along with this
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+import random
 from typing import List
 
 from telegram import Message, Sticker, Update, User
+from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
 
 from bot.database.storage import StickfixDB
-from bot.database.users import StickfixUser, UserModes
+from bot.database.users import StickfixUser, Switch, UserModes
 from bot.utils.errors import InputError, NoStickerError, WrongContextError
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, check_reply, check_sticker, \
@@ -68,6 +70,8 @@ class Stickfix:
         self.__dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
         self.__dispatcher.add_handler(
             CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
+        self.__dispatcher.add_handler(CommandHandler(Commands.SHUFFLE, self.__set_shuffle,
+                                                     pass_args=True))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -113,7 +117,6 @@ class Stickfix:
             message, user, chat = get_message_meta(update)
             message = update.effective_message
             user = update.effective_user
-            user.id = user.id
             if user.id in self.__user_db:
                 del self.__user_db[user.id]
                 self.__logger.info(f"User {user.id} was removed from the database.")
@@ -126,7 +129,6 @@ class Stickfix:
         try:
             message, user, chat = get_message_meta(update)
             if context.args:
-                user.id = user.id
                 if user.id not in self.__user_db:
                     self.__create_user(user.id)
                 mode = context.args[0].upper()
@@ -163,12 +165,30 @@ class Stickfix:
                 chat.send_sticker(sticker_id)
         except WrongContextError:
             self.__logger.debug("Handled exception.")
+        except BadRequest as e:
+            raise e
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    def __set_shuffle(self, update: Update, context: CallbackContext) -> None:
+        """ Turns on or off the shuffle flag for the user. """
+        try:
+            message, user, _ = get_message_meta(update)
+            if user.id not in self.__user_db:
+                self.__create_user(user.id)
+            sf_user = self.__user_db[user.id]
+            if context.args[0] == Switch.ON or context.args[0] == Switch.OFF:
+                sf_user.shuffle = context.args[0] == Switch.ON
+                self.__logger.info(f"User {user.username} turned {context.args[0]} shuffle.")
+            self.__user_db[user.id] = sf_user
+            message.reply_text("Done")
         except Exception as e:
             self.__unexpected_error(e)
 
     def __create_user(self, chat_id: str) -> None:
         """ Creates and adds a user to the database.    """
         self.__user_db[chat_id] = StickfixUser(chat_id)
+        self.__logger.info(f"Created user with id {chat_id}")
 
     def __unexpected_error(self, e: Exception):
         """ Logs an unhandled exception.    """
@@ -188,5 +208,15 @@ class Stickfix:
         origin.reply_text("Ok!")
 
     def __get_sticker_list(self, user: StickfixUser, tags: List[str]):
-        """ """
-        pass
+        """ Returns the list of stickers associated with a tag and a user.  """
+        stickers = []
+        for tag in tags:
+            self.__logger.info(f"Getting stickers matching {tag}")
+            match = self.__user_db[user.id]
+            if not user.private_mode:
+                match = self.__user_db[SF_PUBLIC].get_stickers(tag)
+            stickers.append(match.union(user.get_stickers(tag)))
+        stickers = list(set.intersection(*stickers))
+        if user.shuffle:
+            random.shuffle(stickers)
+        return stickers
