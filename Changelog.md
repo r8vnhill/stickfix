@@ -2,6 +2,7 @@
 
 ## Version 2.2
 
+- [B.11]    Major refactor
 - [B.10]    Added periodic DB writes
 - [B.9]     Updated ``/deleteFrom`` command to the new API version
 - [B.9]     Updated ``/shuffle`` command to the new API version
