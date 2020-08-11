@@ -18,9 +18,11 @@ class UserModes(str, Enum):
     PRIVATE = "private"
     PUBLIC = "public"
 
+
 class Switch(str, Enum):
     ON = "on"
     OFF = "off"
+
 
 class StickfixUser:
     OFF = False
@@ -96,7 +98,7 @@ class StickfixUser:
         if user_id in self.cached_stickers:
             del self.cached_stickers[user_id]
 
-    def remove_sticker(self, sticker_id, sticker_tags):
+    def unlink_sticker(self, sticker_id, sticker_tags):
         """
         Removes a sticker with the specified tags from the database.
         
@@ -110,6 +112,8 @@ class StickfixUser:
                 self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
+        if sticker_tags:
+            logger.info(f"Removed sticker {sticker_id} from tags {', '.join(sticker_tags)}")
 
     @shuffle.setter
     def shuffle(self, value):

@@ -26,12 +26,12 @@ def get_message_content(update: Update):
     return message_content
 
 
-def check_reply(reply: Union[Message, None], message: Message):
+def check_reply(reply: Union[Message, None], message: Message, type="add"):
     """ Checks if a received message replies to another.    """
     if not reply:
         message.reply_markdown(
-            "To add a sticker to the database, you need to *reply to a message* containing "
-            "the sticker you want to add.")
+            f"To {type} a sticker {'to' if type == 'add' else 'from'} the database, you need to "
+            f"*reply to a message* containing the sticker you want to add.")
         user: User = message.from_user
         raise_no_sticker_error(msg=add_error_msg(user.username),
                                cause="The user didn't reply to a sticker.")
@@ -85,10 +85,11 @@ def get_message_meta(update: Update) -> Tuple[Message, User, Chat]:
 
 
 class Commands(str, Enum):
-    START = "start"
     ADD = "add"
-    HELP = "help"
+    DELETE_FROM = "deleteFrom"
     DELETE_ME = "deleteMe"
-    SET_MODE = "setMode"
     GET = "get"
+    HELP = "help"
+    SET_MODE = "setMode"
     SHUFFLE = "shuffle"
+    START = "start"

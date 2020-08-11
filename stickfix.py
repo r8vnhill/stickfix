@@ -4,8 +4,6 @@
 """
 
 import logging
-import random
-from logging.handlers import RotatingFileHandler
 from shutil import copyfile
 from traceback import format_exc
 from uuid import uuid4
@@ -19,8 +17,7 @@ from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryH
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser
-from bot.utils.errors import InputError, InsufficientPermissionsError, NoStickerError, \
-    WrongContextError
+from bot.utils.errors import InputError, InsufficientPermissionsError, NoStickerError
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "2.1.001"
@@ -86,10 +83,6 @@ class StickfixBot:
         self.job_queue.run_repeating(self.periodic_database_check, interval=3600,
                                      first=1800)
         self.job_queue.run_repeating(self.periodic_cache_remove, interval=259200, first=0)
-
-        self.dispatcher.add_handler(CommandHandler('get', self.cmd_get, pass_args=True))
-        self.dispatcher.add_handler(
-            CommandHandler("shuffle", self.cmd_set_shuffle, pass_args=True))
         self.dispatcher.add_handler(
             CommandHandler("deleteFrom", self.cmd_delete_from, pass_args=True))
         self.dispatcher.add_handler(
@@ -100,91 +93,7 @@ class StickfixBot:
         self.dispatcher.add_error_handler(
             self._error_callback)  # Para logging de errores.
 
-    def setup_logger(self):
-        """
-        Sets up a rottating logger.
-        """
-        self._logger.setLevel(logging.INFO)
-        log_file_handler = RotatingFileHandler(filename='stickfix.log', maxBytes=50000,
-                                               backupCount=1)
-        log_file_handler.setFormatter(
-            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        self._logger.addHandler(log_file_handler)
-
-    def run(self):
-        """
-        Starts the bot.
-        """
-        self._updater.start_polling()
-
     # region Chat commands
-    def cmd_add(self, bot, update, args):
-        """
-        Adds a sticker to the database.
-        
-        :param args:
-            Tags that identify the pack to which the stickers are going to be added.
-        """
-        # Se debe crear el usuario SF-PUBLIC si no existe.
-        try:
-            if 'SF-PUBLIC' not in self.user_db:
-                self._create_user('SF-PUBLIC')
-                self._logger.info('Created SF-PUBLIC user.')
-
-            tg_reply_to = update.effective_message.reply_to_message
-            tg_msg = update.message
-            tg_user = update.effective_user
-            tg_user_id = str(tg_user.id)
-            if tg_reply_to is None:  # Si no se responde a ningún mensaje.
-                tg_msg.reply_text(
-                    "To add a sticker to the database, you need to *reply to a message* "
-                    "containing the sticker you "
-                    "want to add.",
-                    parse_mode=ParseMode.HTML)
-                raise NoStickerError(
-                    err_message="Command /add called by user " + tg_user.username + " raised an "
-                                                                                    "exception.",
-                    err_cause="reply_to_message is None.")
-            tg_sticker = tg_reply_to.sticker
-            if tg_sticker is None:  # Si el mensaje al que se responde no contiene ningún sticker.
-                tg_msg.reply_text("I can only add stickers to de database.")
-                raise NoStickerError(
-                    err_message="Command /add called by user " + tg_user.username + " raised an "
-                                                                                    "exception.",
-                    err_cause="sticker is None")
-
-            if len(
-                    args) == 0:  # Si no se especifica un tag, se toma el emoji asociado al sticker.
-                tags = [tg_sticker.emoji]
-            else:
-                tags = args
-            if tags is not None:
-                tg_username = tg_user.username
-                sf_user = self.user_db.get_item(
-                    tg_user_id) if tg_user_id in self.user_db else None
-
-                if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
-                    # Si el usuario no existe o está en modo público, se considera el usuario
-                    # como `SF-PUBLIC`
-                    sf_user = self.user_db.get_item('SF-PUBLIC')
-                    tg_username = 'stickfix-public'
-
-                sf_user.add_sticker(sticker_id=tg_sticker.file_id, sticker_tags=tags)
-                self.user_db.add_item(sf_user.id, sf_user)
-                self._logger.info(
-                    "Sticker added to %s's pack with tags: " + ', '.join(tags),
-                    tg_username)
-                tg_msg.reply_text("Ok.")
-        except NoStickerError as e:
-            self._log_error(e)
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /add command "
-                               "with "
-                               "parameters: " + ", ".join(args) + ".")
-
     def cmd_delete_from(self, bot, update, args):
         """
         Deletes a sticker from the database.
@@ -236,54 +145,6 @@ class StickfixBot:
                                "command with "
                                "parameters: " + ", ".join(args) + ".")
 
-    def cmd_get(self, bot, update, args):
-        """
-        Sends all the stickers of linked with a tag. For debug purposes mainly.
-
-        :param args: Tags linked with the stickers.
-        """
-        try:
-            tg_msg = update.message
-            tg_chat = update.effective_chat
-            tg_user = update.effective_user
-            tg_user_id = str(tg_user.id)
-            tg_username = tg_user.username
-            if tg_chat.type != 'private':
-                tg_msg.reply_text("Sorry, this command only works in private chats.")
-                raise WrongContextError(
-                    err_message="Command /get called by user " + tg_username + " raised an "
-                                                                               "exception.",
-                    err_cause="Chat type is " + tg_chat.type + ".")
-            if len(args) == 0:
-                tg_msg.reply_text(
-                    "You need to give me at least 1 tag to search for stickers.")
-                raise InputError(
-                    err_message="Command /get called by user " + tg_username + " raised an "
-                                                                               "exception.",
-                    err_cause="Not enough arguments.")
-            sf_user = self.user_db.get_item(tg_user_id) if tg_user_id in self.user_db \
-                else self.user_db.get_item('SF-PUBLIC')
-
-            sticker_list = self._get_sticker_list(sf_user, args, sf_user.id)
-            for file_id in sticker_list:
-                try:
-                    bot.send_sticker(chat_id=tg_chat.id, sticker=file_id)
-                except TelegramError:
-                    self._delete_from(update, tg_user, args, file_id)
-            self._logger.info("Sent stickers tagged with " + ", ".join(args) + " to %s.",
-                              tg_username)
-        except WrongContextError as e:
-            self._log_error(e)
-        except InputError as e:
-            self._log_error(e)
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /get command "
-                               "with "
-                               "parameters: " + ", ".join(args) + ".")
-
     def cmd_restore(self, bot, update, args):
         """
         Restores the database to a previous version.
@@ -324,79 +185,6 @@ class StickfixBot:
             self._notify_error(bot, e,
                                "An unexpected exception occured while calling the /deleteMe "
                                "command.")
-
-    def cmd_set_shuffle(self, bot, update, args):
-        """
-        Turns on or off the shuffle mode.
-        By default shuffle is off.
-        
-        :param args:
-            Desired mode. Can be `on` or `off`
-        """
-        try:
-            tg_user = update.effective_user
-            if len(args) != 1:
-                update.message.reply_text(
-                    "Sorry, this command only accepts 1 parameter. Send <code>/shuffle on</code> "
-                    "or <code>/shuffle "
-                    "off</code>.",
-                    parse_mode=ParseMode.HTML)
-                raise InputError(
-                    err_message="Command /shuffle called by user " + tg_user.username + " raised "
-                                                                                        "an "
-                                                                                        "exception.",
-                    err_cause="Wrong number of arguments.")
-            tg_user_id = str(tg_user.id)
-            # Se crea el usuario si no está en la BDD.
-            if tg_user_id not in self.user_db:
-                self._logger.info("User %s was added to the database", tg_user.username)
-                self._create_user(tg_user_id)
-
-            user = self.user_db.get_item(tg_user_id)
-            if args[0].upper() == 'ON':
-                user._shuffle = StickfixUser.ON
-                self._logger.info("User %s turned on the shuffle mode", tg_user.username)
-            elif args[0].upper() == 'OFF':
-                user._shuffle = StickfixUser.OFF
-                self._logger.info("User %s turned off the shuffle mode", tg_user.username)
-            else:
-                update.message.reply_text(
-                    "Sorry, I didn't understand. Send <code>/shuffle on</code> or <code>/shuffle "
-                    "off</code>.",
-                    parse_mode=ParseMode.HTML)
-                raise InputError(
-                    err_cause=args[0] + " is not a valid argument.",
-                    err_message="Command /shuffle called by user " + tg_user.username + " raised "
-                                                                                        "an "
-                                                                                        "exception.")
-            self.user_db.add_item(user.id, user)
-            update.message.reply_text("Ok.")
-        except InputError as e:
-            self._log_error(e)
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /setMode "
-                               "command with "
-                               "parameters: " + ", ".join(args) + ".")
-
-    def cmd_start(self, bot, update):
-        """Greets the user."""
-        try:
-            tg_user = update.effective_user
-            tg_user_id = str(tg_user.id)
-            update.message.reply_sticker('CAADBAADTAADqAABTgXzVqN6dJUIXwI')
-            if tg_user_id not in self.user_db:
-                # TODO -cAdd -v2.2 : Se debería preguntar al usuario si desea ser añadido a la
-                #  BDD  —Ignacio.
-                self._logger.info("User %s was added to the database", tg_user.username)
-                self._create_user(tg_user_id)
-        except TelegramError as e:
-            raise e
-        except Exception as e:
-            self._notify_error(bot, e,
-                               "An unexpected exception occured while calling the /start command.")
 
     # endregion
 
@@ -550,17 +338,6 @@ class StickfixBot:
         self._logger.info("Sticker deleted from %s's pack with tags: " + ', '.join(args),
                           tg_user.username)
 
-    def _create_user(self, user_id):
-        """
-        Creates a new `StickfixUser` and adds it to the database.
-
-        :param user_id:
-            ID of the user to be created.
-        """
-        user = StickfixUser(user_id)
-        self.user_db.add_item(user_id, user)
-        return user
-
     def _error_callback(self, bot, update, error):
         """Log errors."""
         try:
@@ -579,33 +356,6 @@ class StickfixBot:
             self._logger.error(e.message + ". " + " | ".join(e.args))
         except FileNotFoundError as e:
             self._logger.error(e.filename)
-
-    def _get_sticker_list(self, sf_user, tags, user_id, shuffle=False):
-        """
-        Gets all the stickers from a user that mathces the given tags.
-        
-        :return:
-            A list containing all the stickers that matches the tags.
-        """
-        # Hay que pensar si hay alguna manera menos redundante de implementar esto -Ignacio.
-        str_tags = '-'.join(tags)
-        if user_id in sf_user.cached_stickers:
-            if str_tags == '':
-                return list(sf_user.cached_stickers[user_id].values())[0]
-            return sf_user.cached_stickers[user_id][str_tags]
-        stickers = []
-        if len(tags) == 0:
-            return stickers
-        for tag in tags:
-            match = set()
-            if sf_user.private_mode == StickfixUser.OFF:
-                match = self.user_db.get_item('SF-PUBLIC').get_stickers(sticker_tag=tag)
-            stickers.append(match.union(sf_user.get_stickers(sticker_tag=tag)))
-        sticker_list = list(set.intersection(*stickers))
-        if shuffle:
-            random.shuffle(sticker_list)
-        sf_user.cached_stickers[user_id] = { str_tags: sticker_list }
-        return sticker_list
 
     def _log_error(self, error, context=None):
         """Logs an error."""

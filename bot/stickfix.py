@@ -72,6 +72,8 @@ class Stickfix:
             CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
         self.__dispatcher.add_handler(CommandHandler(Commands.SHUFFLE, self.__set_shuffle,
                                                      pass_args=True))
+        self.__dispatcher.add_handler(
+            CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True))
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /start command with a hello sticker and adds the user to the database. """
@@ -182,6 +184,27 @@ class Stickfix:
                 self.__logger.info(f"User {user.username} turned {context.args[0]} shuffle.")
             self.__user_db[user.id] = sf_user
             message.reply_text("Done")
+        except Exception as e:
+            self.__unexpected_error(e)
+
+    def __delete_from(self, update: Update, context: CallbackContext) -> None:
+        """ Deletes a sticker from the database. """
+        sticker: Sticker
+        try:
+            message, user, _ = get_message_meta(update)
+            reply_to = message.reply_to_message
+            check_reply(reply_to, message, "remove")
+            sticker = reply_to.sticker
+            check_sticker(sticker, message)
+            tags = context.args
+            sf_user = self.__user_db[user.id] if user.id in self.__user_db else self.__user_db[
+                SF_PUBLIC]
+            if not sf_user.private_mode:
+                sf_user = self.__user_db[SF_PUBLIC]
+            sf_user.unlink_sticker(sticker.file_id, tags)
+            self.__user_db[user.id] = sf_user
+        except NoStickerError:
+            self.__logger.debug("Handled error.")
         except Exception as e:
             self.__unexpected_error(e)
 
