@@ -4,25 +4,27 @@
 Helper class to manage a shelve database more easily.
 """
 import os
+import shutil
 from typing import KeysView
 
 import yaml
 
 from bot.database.users import StickfixUser
+from bot.utils.logger import StickfixLogger
 
+logger = StickfixLogger(__name__)
 
 class StickfixDB(dict):
     def __init__(self, name: str) -> None:
         super(StickfixDB, self).__init__()
         self.__name__ = name
         self.__data_dir = "data"
-        yaml_path = f"{self.__data_dir}/{name}.yaml"
+        self.__yaml_path = f"{self.__data_dir}/{name}.yaml"
         if not os.path.exists(self.__data_dir):
             os.makedirs(self.__data_dir)
-            with open(yaml_path, "w") as fp:
+            with open(self.__yaml_path, "w") as fp:
                 yaml.dump({ }, fp, yaml.Dumper)
-        with open(yaml_path, "r") as fp:
-            self.__db = yaml.load(fp, yaml.Loader)
+        self.__load_db(self.__yaml_path)
 
     def __contains__(self, item) -> bool:
         return item in self.__db
@@ -41,3 +43,31 @@ class StickfixDB(dict):
 
     def get_keys(self) -> KeysView[str]:
         return self.__db.keys()
+
+    def save(self) -> None:
+        """ Saves the database. """
+        bak_2 = f"{self.__yaml_path}_2.bak"
+        shutil.copy(self.__yaml_path, bak_2)
+        bak_1 = f"{self.__yaml_path}_1.bak"
+        shutil.copy(self.__yaml_path, bak_1)
+        with open(self.__yaml_path, "w") as fp:
+            yaml.dump(self.__db, fp, yaml.Dumper)
+            logger.info("Database saved.")
+        try:
+            self.__load_db(self.__yaml_path)
+        except yaml.YAMLError:
+            logger.error(f"Unexpected error loading {self.__yaml_path}")
+            try:
+                logger.info(f"Loading {bak_1}")
+                self.__load_db(bak_1)
+                shutil.copy(bak_1, self.__yaml_path)
+            except yaml.YAMLError:
+                logger.error(f"Unexpected error loading {bak_1}")
+                logger.info(f"Loading {bak_2}")
+                self.__load_db(bak_2)
+                shutil.copy(bak_2, self.__yaml_path)
+
+    def __load_db(self, path: str) -> None:
+        """ Reads the database from a file. """
+        with open(path, "r") as fp:
+            self.__db = yaml.load(fp, yaml.Loader)

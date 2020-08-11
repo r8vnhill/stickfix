@@ -12,7 +12,7 @@ from typing import Callable, Tuple, Union
 from telegram import Chat, Message, ParseMode, Sticker, Update, User
 from telegram.ext import CallbackContext
 
-from bot.utils.errors import InputError, NoStickerError, WrongContextError
+from bot.utils.errors import InputException, NoStickerException, WrongContextException
 from bot.utils.logger import StickfixLogger
 
 module_logger = StickfixLogger(__name__)
@@ -61,15 +61,15 @@ def add_error_msg(user: str) -> str:
 
 
 def raise_no_sticker_error(msg: str, cause: str):
-    raise_error(NoStickerError, msg, cause)
+    raise_error(NoStickerException, msg, cause)
 
 
 def raise_input_error(msg: str, cause: str):
-    raise_error(InputError, msg, cause)
+    raise_error(InputException, msg, cause)
 
 
 def raise_wrong_context_error(msg: str, cause: str) -> None:
-    raise_error(WrongContextError, msg, cause)
+    raise_error(WrongContextException, msg, cause)
 
 
 def raise_error(constructor: Callable, msg: str, cause: str) -> None:

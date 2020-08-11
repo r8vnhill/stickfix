@@ -10,11 +10,11 @@ from typing import List
 
 from telegram import Message, Sticker, Update, User
 from telegram.error import BadRequest
-from telegram.ext import CallbackContext, CommandHandler, Dispatcher, Updater
+from telegram.ext import CallbackContext, CommandHandler, Dispatcher, JobQueue, Updater
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser, Switch, UserModes
-from bot.utils.errors import InputError, NoStickerError, WrongContextError
+from bot.utils.errors import InputException, NoStickerException, WrongContextException
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, check_reply, check_sticker, \
     get_message_meta, \
@@ -44,12 +44,15 @@ class Stickfix:
         :param admins:
             list of the ids of the users who have admin privileges over the bot
         """
+        job_queue: JobQueue
         self.__logger = StickfixLogger(__name__)
         self.__start_updater(token)
         self.__admins = admins
         self.__dispatcher = self.__updater.dispatcher
         self.__setup_handlers()
         self.__user_db = StickfixDB(USERS_DB)
+        job_queue = self.__updater.job_queue
+        job_queue.run_repeating(self.__user_db.save, interval=5 * 60)
 
     def run(self) -> None:
         """ Runs the bot.   """
@@ -98,7 +101,7 @@ class Stickfix:
             emoji = [sticker.emoji] if sticker.emoji else []
             tags = context.args if context.args else emoji
             self.__link_tags(sticker, tags, msg)
-        except NoStickerError:
+        except NoStickerException:
             self.__logger.debug("Handled error.")
         except Exception as e:
             self.__unexpected_error(e)
@@ -146,7 +149,7 @@ class Stickfix:
                     raise_input_error(cause=f"{mode} is not a valid argument.",
                                       msg=f"Command /setMode called by user {user.username} "
                                           f"raised an exception.")
-        except InputError:
+        except InputException:
             self.__logger.debug("Handled exception.")
         except Exception as e:
             self.__unexpected_error(e)
@@ -165,7 +168,7 @@ class Stickfix:
             stickers = self.__get_sticker_list(sf_user, context.args)
             for sticker_id in stickers:
                 chat.send_sticker(sticker_id)
-        except WrongContextError:
+        except WrongContextException:
             self.__logger.debug("Handled exception.")
         except BadRequest as e:
             raise e
@@ -203,7 +206,7 @@ class Stickfix:
                 sf_user = self.__user_db[SF_PUBLIC]
             sf_user.unlink_sticker(sticker.file_id, tags)
             self.__user_db[user.id] = sf_user
-        except NoStickerError:
+        except NoStickerException:
             self.__logger.debug("Handled error.")
         except Exception as e:
             self.__unexpected_error(e)

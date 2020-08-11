@@ -1,12 +1,11 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
+""" "Stickfix" (c) by Ignacio Slater M.
+    "Stickfix" is licensed under a
+    Creative Commons Attribution 4.0 International License.
+
+    You should have received a copy of the license along with this
+    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 import random
-
-__author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.1"
-
 from enum import Enum
 
 from bot.utils.logger import StickfixLogger

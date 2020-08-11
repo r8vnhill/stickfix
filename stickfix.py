@@ -17,7 +17,7 @@ from telegram.ext import ChosenInlineResultHandler, CommandHandler, InlineQueryH
 
 from bot.database.storage import StickfixDB
 from bot.database.users import StickfixUser
-from bot.utils.errors import InputError, InsufficientPermissionsError, NoStickerError
+from bot.utils.errors import InputException, InsufficientPermissionsException, NoStickerException
 
 __author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
 __version__ = "2.1.001"
@@ -84,8 +84,6 @@ class StickfixBot:
                                      first=1800)
         self.job_queue.run_repeating(self.periodic_cache_remove, interval=259200, first=0)
         self.dispatcher.add_handler(
-            CommandHandler("deleteFrom", self.cmd_delete_from, pass_args=True))
-        self.dispatcher.add_handler(
             CommandHandler("restore", self.cmd_restore, pass_args=True))
         self.dispatcher.add_handler(InlineQueryHandler(self._inline_get))
         self.dispatcher.add_handler(ChosenInlineResultHandler(self._on_inline_result))
@@ -111,7 +109,7 @@ class StickfixBot:
             if len(args) == 0:
                 update.message.reply_text(
                     "You need to give me at least 1 tag to search for stickers.")
-                raise InputError(
+                raise InputException(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="Not enough arguments.")
             if tg_reply_to is None:
@@ -121,21 +119,21 @@ class StickfixBot:
                     "containing the sticker "
                     "you want to remove.",
                     parse_mode=ParseMode.HTML)
-                raise NoStickerError(
+                raise NoStickerException(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="reply_to_message is None.")
             tg_sticker = tg_reply_to.sticker
             if tg_sticker is None:  # Si el mensaje al que se responde no contiene ningún sticker.
                 update.message.reply_text(
                     "The message you replied to doesn't contain a sticker.")
-                raise NoStickerError(
+                raise NoStickerException(
                     err_message="Command /deleteFrom called by user " + tg_user.username + " raised an exception.",
                     err_cause="sticker is None")
             self._delete_from(update, tg_user, args)
             update.message.reply_text("Ok.")
-        except InputError as e:
+        except InputException as e:
             self._log_error(e)
-        except NoStickerError as e:
+        except NoStickerException as e:
             self._log_error(e)
         except TelegramError as e:
             raise e
@@ -158,14 +156,14 @@ class StickfixBot:
             if tg_user.id not in self._admins:
                 tg_msg.reply_text(
                     "You have no permission to use this command. Please contact an admin.")
-                raise InsufficientPermissionsError(
+                raise InsufficientPermissionsException(
                     err_message="Command /restore called by user " + str(
                         tg_user.username) + " raised an exception.",
                     err_cause="User " + str(tg_user.username) + " is not an admin.")
             n = len(args)
             if n > 1:
                 tg_msg.reply_text("This command can't take more than 1 parameter")
-                raise InputError(
+                raise InputException(
                     err_message="Command /restore called by user " + tg_user.username + " raised "
                                                                                         "an "
                                                                                         "exception.",
@@ -175,9 +173,9 @@ class StickfixBot:
             else:
                 self._restore_from_backup(int(args[0]))
             tg_msg.reply_text("Ok.")
-        except InsufficientPermissionsError as e:
+        except InsufficientPermissionsException as e:
             self._notify_error(bot, e, e.message, e.cause)
-        except InputError as e:
+        except InputException as e:
             self._log_error(e)
         except TelegramError as e:
             raise e
@@ -321,22 +319,6 @@ class StickfixBot:
         """Sends a message to all admin users."""
         for admin_id in self._admins:
             bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.HTML)
-
-    def _delete_from(self, update, tg_user, args, sticker_id=None):
-        tg_user_id = str(tg_user.id)
-        sf_user = self.user_db.get_item(
-            tg_user_id) if tg_user_id in self.user_db else None
-        if sf_user is None or sf_user.private_mode == StickfixUser.OFF:
-            # Si el usuario no existe o está en modo público, se considera el usuario como
-            # `SF-PUBLIC`
-            sf_user = self.user_db.get_item('SF-PUBLIC')
-        sticker_id = update.effective_message.reply_to_message.sticker.file_id if sticker_id is \
-                                                                                  None else \
-            sticker_id
-        sf_user.remove_sticker(sticker_id=sticker_id, sticker_tags=args)
-        self.user_db.add_item(sf_user.id, sf_user)
-        self._logger.info("Sticker deleted from %s's pack with tags: " + ', '.join(args),
-                          tg_user.username)
 
     def _error_callback(self, bot, update, error):
         """Log errors."""
