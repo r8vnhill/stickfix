@@ -6,15 +6,14 @@
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
-from telegram.ext import Dispatcher, JobQueue, \
-    Updater
+from telegram.ext import Dispatcher, JobQueue, Updater
 
 from bot.database.storage import StickfixDB
+from bot.handlers.inline import InlineHandler
 from bot.handlers.stickers import StickerHandler
 from bot.handlers.utility import HelperHandler, UserHandler
 from bot.utils.logger import StickfixLogger
 
-SF_PUBLIC = "SF-PUBLIC"
 USERS_DB = "users"
 
 
@@ -57,3 +56,4 @@ class Stickfix:
         HelperHandler(self.__dispatcher, self.__user_db)
         UserHandler(self.__dispatcher, self.__user_db)
         StickerHandler(self.__dispatcher, self.__user_db)
+        InlineHandler(self.__dispatcher, self.__user_db)

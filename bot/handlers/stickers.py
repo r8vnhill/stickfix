@@ -5,7 +5,6 @@
     You should have received a copy of the license along with this
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
-import random
 from typing import List
 
 from telegram import Message, Sticker, Update
@@ -13,9 +12,8 @@ from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.database.storage import StickfixDB
-from bot.database.users import StickfixUser, UserModes
+from bot.database.users import SF_PUBLIC, UserModes
 from bot.handlers.common import StickfixHandler
-from bot.stickfix import SF_PUBLIC
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, check_reply, check_sticker, get_message_meta, \
@@ -66,7 +64,7 @@ class StickerHandler(StickfixHandler):
                     cause=f"Chat type is {chat.type}.")
             sf_user = self._user_db[user.id] if user.id in self._user_db else self._user_db[
                 SF_PUBLIC]
-            stickers = self.__get_sticker_list(sf_user, context.args)
+            stickers = self._get_sticker_list(sf_user, context.args)
             for sticker_id in stickers:
                 chat.send_sticker(sticker_id)
         except WrongContextException:
@@ -107,17 +105,3 @@ class StickerHandler(StickfixHandler):
             effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
             self._user_db[user.id] = effective_user
         origin.reply_text("Ok!")
-
-    def __get_sticker_list(self, user: StickfixUser, tags: List[str]):
-        """ Returns the list of stickers associated with a tag and a user.  """
-        stickers = []
-        for tag in tags:
-            logger.info(f"Getting stickers matching {tag}")
-            match = self._user_db[user.id]
-            if not user.private_mode:
-                match = self._user_db[SF_PUBLIC].get_stickers(tag)
-            stickers.append(match.union(user.get_stickers(tag)))
-        stickers = list(set.intersection(*stickers))
-        if user.shuffle:
-            random.shuffle(stickers)
-        return stickers

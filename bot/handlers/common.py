@@ -5,13 +5,18 @@
     You should have received a copy of the license along with this
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+import random
+from typing import List
+
 from telegram.ext import Dispatcher
 
 from bot.database.storage import StickfixDB
-from bot.database.users import StickfixUser
+from bot.database.users import SF_PUBLIC, StickfixUser
 from bot.utils.logger import StickfixLogger
 
 logger = StickfixLogger(__name__)
+
+HELP_PATH = "bot/utils/HELP.md"
 
 
 class StickfixHandler:
@@ -26,3 +31,17 @@ class StickfixHandler:
         """ Creates and adds a user to the database.    """
         self._user_db[user_id] = StickfixUser(user_id)
         logger.info(f"Created user with id {user_id}")
+
+    def _get_sticker_list(self, user: StickfixUser, tags: List[str]):
+        """ Returns the list of stickers associated with a tag and a user.  """
+        stickers = []
+        for tag in tags:
+            logger.info(f"Getting stickers matching {tag}")
+            match = self._user_db[user.id]
+            if not user.private_mode:
+                match = self._user_db[SF_PUBLIC].get_stickers(tag)
+            stickers.append(match.union(user.get_stickers(tag)))
+        stickers = list(set.intersection(*stickers))
+        if user.shuffle:
+            random.shuffle(stickers)
+        return stickers

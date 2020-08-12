@@ -10,7 +10,7 @@ from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.database.storage import StickfixDB
 from bot.database.users import Switch, UserModes
-from bot.handlers.common import StickfixHandler
+from bot.handlers.common import HELP_PATH, StickfixHandler
 from bot.utils.errors import InputException, unexpected_error
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, get_message_meta, raise_input_error
@@ -22,7 +22,7 @@ def send_help_message(update: Update, context: CallbackContext) -> None:
     """ Sends a help message to the chat.   """
     try:
         _, _, chat = get_message_meta(update)
-        with open("bot/utils/HELP.md", "r") as help_file:
+        with open(HELP_PATH, "r") as help_file:
             context.bot.send_message(chat_id=chat.id, text=help_file.read(),
                                      parse_mode=ParseMode.MARKDOWN)
         logger.info(f"Sent help message to {chat.username}.")

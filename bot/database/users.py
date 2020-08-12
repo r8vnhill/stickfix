@@ -117,3 +117,6 @@ class StickfixUser:
     @shuffle.setter
     def shuffle(self, value):
         self._shuffle = value
+
+
+SF_PUBLIC = "SF-PUBLIC"
