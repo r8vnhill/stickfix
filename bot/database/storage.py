@@ -52,18 +52,18 @@ class StickfixDB(dict):
         shutil.copy(self.__yaml_path, bak_1)
         with open(self.__yaml_path, "w") as fp:
             yaml.dump(self.__db, fp, yaml.Dumper)
-            logger.info("Database saved.")
+            logger.debug("Database saved.")
         try:
             self.__load_db(self.__yaml_path)
         except yaml.YAMLError:
             logger.error(f"Unexpected error loading {self.__yaml_path}")
             try:
-                logger.info(f"Loading {bak_1}")
+                logger.debug(f"Loading {bak_1}")
                 self.__load_db(bak_1)
                 shutil.copy(bak_1, self.__yaml_path)
             except yaml.YAMLError:
                 logger.error(f"Unexpected error loading {bak_1}")
-                logger.info(f"Loading {bak_2}")
+                logger.debug(f"Loading {bak_2}")
                 self.__load_db(bak_2)
                 shutil.copy(bak_2, self.__yaml_path)
 
