@@ -72,7 +72,7 @@ class UserHandler(StickfixHandler):
             if context.args:
                 if user.id not in self._user_db:
                     self._create_user(user.id)
-                mode = context.args[0].upper()
+                mode = context.args[0]
                 sf_user = self._user_db[user.id]
                 if mode == UserModes.PRIVATE or mode == UserModes.PUBLIC:
                     sf_user.private_mode = mode == UserModes.PRIVATE

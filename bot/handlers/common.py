@@ -32,7 +32,7 @@ class StickfixHandler:
         self._user_db[user_id] = StickfixUser(user_id)
         logger.info(f"Created user with id {user_id}")
 
-    def _get_sticker_list(self, user: StickfixUser, tags: List[str]):
+    def _get_sticker_list(self, user: StickfixUser, tags: List[str]) -> List[str]:
         """ Returns the list of stickers associated with a tag and a user.  """
         stickers = []
         for tag in tags:
@@ -40,7 +40,9 @@ class StickfixHandler:
             match = self._user_db[user.id]
             if not user.private_mode:
                 match = self._user_db[SF_PUBLIC].get_stickers(tag)
-            stickers.append(match.union(user.get_stickers(tag)))
+            match = match.union(user.get_stickers(tag))
+            stickers.append(match)
+            user.cache[tag] = list(match)
         stickers = list(set.intersection(*stickers))
         if user.shuffle:
             random.shuffle(stickers)

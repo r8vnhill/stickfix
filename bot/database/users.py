@@ -7,6 +7,7 @@
 """
 import random
 from enum import Enum
+from typing import Dict, List, Set
 
 from bot.utils.logger import StickfixLogger
 
@@ -27,6 +28,8 @@ class StickfixUser:
     OFF = False
     ON = True
     _shuffle: bool
+    cached_stickers: Dict[str, List[str]]
+    stickers: Dict[str, List[str]]
 
     def __init__(self, user_id):
         """
@@ -44,6 +47,14 @@ class StickfixUser:
     @property
     def shuffle(self) -> bool:
         return self._shuffle
+
+    @shuffle.setter
+    def shuffle(self, value):
+        self._shuffle = value
+
+    @property
+    def cache(self) -> Dict[str, List[str]]:
+        return self.cached_stickers
 
     def add_sticker(self, sticker_id, sticker_tags):
         """
@@ -67,7 +78,7 @@ class StickfixUser:
                 self.stickers[tag] = sorted(aux)
         logger.info(f"Sticker added to {self.id} pack with tags: {', '.join(sticker_tags)}")
 
-    def get_stickers(self, sticker_tag):
+    def get_stickers(self, sticker_tag: str) -> Set[str]:
         """
         Gets all stickers from the database that matches the tag.
 
@@ -76,6 +87,11 @@ class StickfixUser:
         :returns:
             Set with all the stickers that matches the tag.
         """
+        if self.cache:
+            try:
+                return set(self.cache[sticker_tag])
+            except KeyError:
+                pass
         if sticker_tag in self.stickers:
             return set(self.stickers[sticker_tag])
         return set()
@@ -94,8 +110,7 @@ class StickfixUser:
         :param user_id:
             Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for other users.
         """
-        if user_id in self.cached_stickers:
-            del self.cached_stickers[user_id]
+        self.cached_stickers = { }
 
     def unlink_sticker(self, sticker_id, sticker_tags):
         """
@@ -113,10 +128,6 @@ class StickfixUser:
                     del self.stickers[tag]
         if sticker_tags:
             logger.info(f"Removed sticker {sticker_id} from tags {', '.join(sticker_tags)}")
-
-    @shuffle.setter
-    def shuffle(self, value):
-        self._shuffle = value
 
 
 SF_PUBLIC = "SF-PUBLIC"

@@ -2,6 +2,7 @@
 
 ## Version 2.2
 
+- [RC.2]    Fixed inline query cache issue
 - [RC.1]    Inline queries
 - [B.11]    Major refactor
 - [B.10]    Added periodic DB writes
