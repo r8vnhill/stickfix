@@ -6,7 +6,7 @@
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
-from telegram.ext import Dispatcher, JobQueue, Updater
+from telegram.ext import CallbackContext, Dispatcher, JobQueue, Updater
 
 from bot.database.storage import StickfixDB
 from bot.handlers.inline import InlineHandler
@@ -40,7 +40,7 @@ class Stickfix:
         self.__user_db = StickfixDB(USERS_DB)
         self.__setup_handlers()
         job_queue = self.__updater.job_queue
-        job_queue.run_repeating(self.__user_db.save, interval=5 * 60)
+        job_queue.run_repeating(self.__save_db, interval=5 * 60, first=0)
 
     def run(self) -> None:
         """ Runs the bot.   """
@@ -51,6 +51,10 @@ class Stickfix:
         """ Starts the bot's updater with the given token.  """
         self.__logger.info(f"Starting bot updater")
         self.__updater = Updater(token, use_context=True)
+
+    # noinspection PyUnusedLocal
+    def __save_db(self, context: CallbackContext):
+        self.__user_db.save()
 
     def __setup_handlers(self):
         HelperHandler(self.__dispatcher, self.__user_db)
