@@ -1,5 +1,15 @@
 {
-  "python.pythonPath": "C:\\Python37\\python.exe",
-  "python.linting.pylintEnabled": true,
-  "python.linting.enabled": true
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#161E7A",
+    "titleBar.activeBackground": "#1F2AAB",
+    "titleBar.activeForeground": "#FAFBFE"
+  },
+  "spellright.language": [
+    "en"
+  ],
+  "spellright.documentTypes": [
+    "markdown",
+    "latex",
+    "plaintext"
+  ]
 }

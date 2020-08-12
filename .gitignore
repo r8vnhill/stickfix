@@ -295,3 +295,6 @@ $RECYCLE.BIN/
 
 bot.py
 *.log*
+secret.yml
+*.yaml
+data/users.yaml
