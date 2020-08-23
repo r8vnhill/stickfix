@@ -1,5 +1,8 @@
 # Changelog
 
+## Version 3.0
+- [B.1] Base database creation test
+
 ## Version 2.2
 
 - [RC.2]    Fixed inline query cache issue
