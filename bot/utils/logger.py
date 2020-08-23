@@ -9,7 +9,27 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 
-class StickfixLogger:
+class ILogger:
+    """ Base class for handling bot logs.   """
+
+    def debug(self, msg: str) -> None:
+        """ Logs a message with debug level.    """
+        raise NotImplementedError
+
+    def info(self, msg: str) -> None:
+        """ Logs a message with info level.    """
+        raise NotImplementedError
+
+    def error(self, msg: str) -> None:
+        """ Logs a message with error level.    """
+        raise NotImplementedError
+
+    def critical(self, msg: str) -> None:
+        """ Logs a message with error level.    """
+        raise NotImplementedError
+
+
+class StickfixLogger(ILogger):
     """ Wrapper class to handle the bot logs. """
     __logger: logging.Logger
 
@@ -29,17 +49,29 @@ class StickfixLogger:
         self.__logger.addHandler(file_logger)
 
     def debug(self, msg: str) -> None:
-        """ Logs a message with debug level.    """
         self.__logger.debug(msg)
 
     def info(self, msg: str) -> None:
-        """ Logs a message with info level.    """
         self.__logger.info(msg)
 
     def error(self, msg: str) -> None:
-        """ Logs a message with error level.    """
         self.__logger.error(msg)
 
     def critical(self, msg: str) -> None:
-        """ Logs a message with error level.    """
         self.__logger.critical(msg)
+
+
+class NullLogger(ILogger):
+    """ Null logger that doesn't print or save anything.    """
+
+    def debug(self, msg: str) -> None:
+        pass
+
+    def info(self, msg: str) -> None:
+        pass
+
+    def error(self, msg: str) -> None:
+        pass
+
+    def critical(self, msg: str) -> None:
+        pass

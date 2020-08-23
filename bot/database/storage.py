@@ -10,13 +10,15 @@ from typing import KeysView
 import yaml
 
 from bot.database.users import StickfixUser
-from bot.utils.logger import StickfixLogger
+from bot.utils.logger import ILogger, NullLogger, StickfixLogger
 
-logger = StickfixLogger(__name__)
 
 class StickfixDB(dict):
-    def __init__(self, name: str) -> None:
+    __logger: ILogger
+
+    def __init__(self, name: str, test: bool = False) -> None:
         super(StickfixDB, self).__init__()
+        self.__logger = NullLogger() if test else StickfixLogger(__name__)
         self.__name__ = name
         self.__data_dir = "data"
         self.__yaml_path = f"{self.__data_dir}/{name}.yaml"
@@ -52,18 +54,18 @@ class StickfixDB(dict):
         shutil.copy(self.__yaml_path, bak_1)
         with open(self.__yaml_path, "w") as fp:
             yaml.dump(self.__db, fp, yaml.Dumper)
-            logger.debug("Database saved.")
+            self.__logger.debug("Database saved.")
         try:
             self.__load_db(self.__yaml_path)
         except yaml.YAMLError:
-            logger.error(f"Unexpected error loading {self.__yaml_path}")
+            self.__logger.error(f"Unexpected error loading {self.__yaml_path}")
             try:
-                logger.debug(f"Loading {bak_1}")
+                self.__logger.debug(f"Loading {bak_1}")
                 self.__load_db(bak_1)
                 shutil.copy(bak_1, self.__yaml_path)
             except yaml.YAMLError:
-                logger.error(f"Unexpected error loading {bak_1}")
-                logger.debug(f"Loading {bak_2}")
+                self.__logger.error(f"Unexpected error loading {bak_1}")
+                self.__logger.debug(f"Loading {bak_2}")
                 self.__load_db(bak_2)
                 shutil.copy(bak_2, self.__yaml_path)
 

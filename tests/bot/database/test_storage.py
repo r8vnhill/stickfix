@@ -1,12 +1,14 @@
 import unittest
 
 import pytest
+from _pytest.tmpdir import TempdirFactory
 
 from bot.database.storage import StickfixDB
 
 
-@pytest.fixture
-def database() -> StickfixDB:
+@pytest.fixture(scope="session")
+def database(tmpdir_factory: TempdirFactory) -> StickfixDB:
+    tmpdir_factory.mktemp()
     return StickfixDB("user_test")
 
 

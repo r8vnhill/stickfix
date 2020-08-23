@@ -1,6 +1,7 @@
 # Changelog
 
 ## Version 3.0
+- [B.2] Added null logger
 - [B.1] Base database creation test
 
 ## Version 2.2
