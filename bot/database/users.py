@@ -1,17 +1,36 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
+""" "Stickfix" (c) by Ignacio Slater M.
+    "Stickfix" is licensed under a
+    Creative Commons Attribution 4.0 International License.
+
+    You should have received a copy of the license along with this
+    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 import random
+from enum import Enum
+from typing import Dict, List, Set
 
-__author__ = "Ignacio Slater Muñoz <ignacio.slater@ug.uchile.cl>"
-__version__ = "2.0.1"
+from bot.utils.logger import StickfixLogger
+
+logger = StickfixLogger(__name__)
+
+
+class UserModes(str, Enum):
+    PRIVATE = "private"
+    PUBLIC = "public"
+
+
+class Switch(str, Enum):
+    ON = "on"
+    OFF = "off"
 
 
 class StickfixUser:
     OFF = False
     ON = True
-    
+    _shuffle: bool
+    cached_stickers: Dict[str, List[str]]
+    stickers: Dict[str, List[str]]
+
     def __init__(self, user_id):
         """
         Creates a StickfixBot user with default values.
@@ -21,10 +40,22 @@ class StickfixUser:
         """
         self.id = user_id
         self.stickers = dict()
-        self.cached_stickers = {}
-        self.private_mode = self.OFF
-        self._shuffle = self.OFF
-    
+        self.cached_stickers = { }
+        self.private_mode = False
+        self._shuffle = False
+
+    @property
+    def shuffle(self) -> bool:
+        return self._shuffle
+
+    @shuffle.setter
+    def shuffle(self, value):
+        self._shuffle = value
+
+    @property
+    def cache(self) -> Dict[str, List[str]]:
+        return self.cached_stickers
+
     def add_sticker(self, sticker_id, sticker_tags):
         """
         Adds a sticker to the database with the specified tags.
@@ -36,7 +67,7 @@ class StickfixUser:
         """
         for tag in sticker_tags:
             if self.stickers is None:
-                self.stickers = {tag: [sticker_id]}
+                self.stickers = { tag: [sticker_id] }
             else:
                 if tag in self.stickers:
                     aux = self.stickers[tag]
@@ -45,8 +76,9 @@ class StickfixUser:
                 else:
                     aux = [sticker_id]
                 self.stickers[tag] = sorted(aux)
-    
-    def get_stickers(self, sticker_tag):
+        logger.info(f"Sticker added to {self.id} pack with tags: {', '.join(sticker_tags)}")
+
+    def get_stickers(self, sticker_tag: str) -> Set[str]:
         """
         Gets all stickers from the database that matches the tag.
 
@@ -55,6 +87,11 @@ class StickfixUser:
         :returns:
             Set with all the stickers that matches the tag.
         """
+        if self.cache:
+            try:
+                return set(self.cache[sticker_tag])
+            except KeyError:
+                pass
         if sticker_tag in self.stickers:
             return set(self.stickers[sticker_tag])
         return set()
@@ -65,7 +102,7 @@ class StickfixUser:
         if len(tag_list) == 0:
             return []
         return [random.choice(tag_list)]
-        
+
     def remove_cached_stickers(self, user_id=None):
         """
         Removes the cached stickers for the user.
@@ -73,10 +110,9 @@ class StickfixUser:
         :param user_id:
             Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for other users.
         """
-        if user_id in self.cached_stickers:
-            del self.cached_stickers[user_id]
+        self.cached_stickers = { }
 
-    def remove_sticker(self, sticker_id, sticker_tags):
+    def unlink_sticker(self, sticker_id, sticker_tags):
         """
         Removes a sticker with the specified tags from the database.
         
@@ -90,3 +126,8 @@ class StickfixUser:
                 self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
+        if sticker_tags:
+            logger.info(f"Removed sticker {sticker_id} from tags {', '.join(sticker_tags)}")
+
+
+SF_PUBLIC = "SF-PUBLIC"
