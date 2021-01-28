@@ -71,7 +71,8 @@ class StickfixUser:
         Removes the cached stickers for the user.
         
         :param user_id:
-            Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for other users.
+            Usually the same id as `self.id`, but `SF-PUBLIC` can cache stickers for
+            other users.
         """
         if user_id in self.cached_stickers:
             del self.cached_stickers[user_id]
