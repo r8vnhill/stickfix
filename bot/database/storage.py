@@ -5,7 +5,7 @@ Helper class to manage a shelve database more easily.
 """
 import os
 import shutil
-from typing import KeysView
+from typing import Dict, KeysView
 
 import yaml
 
@@ -14,7 +14,10 @@ from bot.utils.logger import StickfixLogger
 
 logger = StickfixLogger(__name__)
 
+
 class StickfixDB(dict):
+    __db: Dict
+
     def __init__(self, name: str) -> None:
         super(StickfixDB, self).__init__()
         self.__name__ = name
@@ -24,7 +27,7 @@ class StickfixDB(dict):
             os.makedirs(self.__data_dir)
             with open(self.__yaml_path, "w") as fp:
                 yaml.dump({ }, fp, yaml.Dumper)
-        self.__load_db(self.__yaml_path)
+        self.load_db()
 
     def __contains__(self, item) -> bool:
         return item in self.__db
@@ -54,20 +57,22 @@ class StickfixDB(dict):
             yaml.dump(self.__db, fp, yaml.Dumper)
             logger.debug("Database saved.")
         try:
-            self.__load_db(self.__yaml_path)
+            self.load_db()
         except yaml.YAMLError:
             logger.error(f"Unexpected error loading {self.__yaml_path}")
             try:
                 logger.debug(f"Loading {bak_1}")
-                self.__load_db(bak_1)
+                self.load_db()
                 shutil.copy(bak_1, self.__yaml_path)
             except yaml.YAMLError:
                 logger.error(f"Unexpected error loading {bak_1}")
                 logger.debug(f"Loading {bak_2}")
-                self.__load_db(bak_2)
+                self.load_db()
                 shutil.copy(bak_2, self.__yaml_path)
 
-    def __load_db(self, path: str) -> None:
+    def load_db(self) -> None:
         """ Reads the database from a file. """
+        path = self.__yaml_path
         with open(path, "r") as fp:
             self.__db = yaml.load(fp, yaml.Loader)
+            logger.debug(f"Loaded database from {path}")

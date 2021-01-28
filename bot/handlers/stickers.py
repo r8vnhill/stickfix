@@ -104,4 +104,5 @@ class StickerHandler(StickfixHandler):
             effective_user = user if user.private_mode else self._user_db[SF_PUBLIC]
             effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
             self._user_db[user.id] = effective_user
+            self._user_db.save()
         origin.reply_text("Ok!")

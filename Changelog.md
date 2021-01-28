@@ -2,6 +2,7 @@
 
 ## Version 2.2
 
+- [RC.3]    DB is saved in every addition
 - [B.12]    Fixed inline query default answer
 - [RC.2]    Fixed inline query cache issue
 - [RC.1]    Inline queries
