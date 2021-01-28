@@ -11,5 +11,6 @@
     "markdown",
     "latex",
     "plaintext"
-  ]
+  ],
+  "powershell.codeFormatting.addWhitespaceAroundPipe": true
 }

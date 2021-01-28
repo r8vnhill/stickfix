@@ -6,7 +6,7 @@
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 import random
-from typing import List
+from typing import List, Tuple
 from uuid import uuid4
 
 from telegram import InlineQuery, InlineQueryResult, InlineQueryResultArticle, \
@@ -34,6 +34,7 @@ class InlineHandler(StickfixHandler):
         """
         user: User
         inline_query: InlineQuery
+
         try:
             inline_query = update.inline_query
             query = inline_query.query
@@ -44,7 +45,7 @@ class InlineHandler(StickfixHandler):
             tags = str(query).split(" ")
             stickers = []
             if not offset and not query:
-                stickers = self.__send_default_answer(sf_user)
+                tags, stickers = self.__send_default_answer(sf_user)
             sticker_list = self._get_sticker_list(sf_user, tags)
             upper_bound = min(len(sticker_list), offset + 49)
             if sf_user.shuffle:
@@ -72,7 +73,8 @@ class InlineHandler(StickfixHandler):
         except Exception as e:
             unexpected_error(e, logger)
 
-    def __send_default_answer(self, user: StickfixUser) -> List[InlineQueryResult]:
+    def __send_default_answer(self, user: StickfixUser) -> Tuple[
+        List[str], List[InlineQueryResult]]:
         results = []
         if user.private_mode:
             tags = user.random_tag()
@@ -86,4 +88,4 @@ class InlineHandler(StickfixHandler):
             description=f"Try calling me inline like `@stickfixbot {tags[0]}`",
             input_message_content=InputTextMessageContent(help_text,
                                                           parse_mode=ParseMode.MARKDOWN)))
-        return results
+        return tags, results
