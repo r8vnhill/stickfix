@@ -82,3 +82,4 @@ class Commands(str, Enum):
     SET_MODE = "setMode"
     SHUFFLE = "shuffle"
     START = "start"
+    WTF = "wtf"

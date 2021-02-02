@@ -5,6 +5,7 @@
     You should have received a copy of the license along with this
     work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+import random
 from typing import List
 
 from telegram import Message, Sticker, Update
@@ -31,6 +32,8 @@ class StickerHandler(StickfixHandler):
             CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
         self._dispatcher.add_handler(
             CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True))
+        self._dispatcher.add_handler(
+            CommandHandler(Commands.WTF, self.__wtf, pass_args=False))
 
     def __add_sticker(self, update: Update, context: CallbackContext) -> None:
         """ Answers the /add command by adding a sticker to the DB. """
@@ -106,3 +109,16 @@ class StickerHandler(StickfixHandler):
             self._user_db[user.id] = effective_user
             self._user_db.save()
         origin.reply_text("Ok!")
+
+    def __wtf(self, update: Update, _: CallbackContext) -> None:
+        try:
+            message, user, chat = get_message_meta(update)
+            sf_user = self._user_db[SF_PUBLIC]
+            stickers = self._get_sticker_list(sf_user, ["👀"])
+            message.reply_sticker(random.choice(stickers))
+        except WrongContextException:
+            logger.debug("Handled exception.")
+        except BadRequest as e:
+            raise e
+        except Exception as e:
+            unexpected_error(e, logger)
