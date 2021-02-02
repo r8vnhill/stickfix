@@ -123,7 +123,8 @@ class StickfixUser:
         """
         for tag in sticker_tags:
             if tag in self.stickers:
-                self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
+                self.stickers[tag].remove(sticker_id)
+                # self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
         if sticker_tags:

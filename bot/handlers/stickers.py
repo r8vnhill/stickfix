@@ -88,8 +88,9 @@ class StickerHandler(StickfixHandler):
                 SF_PUBLIC]
             if not sf_user.private_mode:
                 sf_user = self._user_db[SF_PUBLIC]
-            sf_user.unlink_sticker(sticker.file_id, tags)
+            sf_user.unlink_sticker(sticker.file_unique_id, tags)
             self._user_db[user.id] = sf_user
+            message.reply_text("Sure!")
         except NoStickerException:
             logger.debug("Handled error.")
         except Exception as e:
@@ -102,7 +103,7 @@ class StickerHandler(StickfixHandler):
             user = self._user_db[user_id] if user_id in self._user_db else self._user_db[
                 SF_PUBLIC]
             effective_user = user if user.private_mode else self._user_db[SF_PUBLIC]
-            effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
+            effective_user.add_sticker(sticker_id=sticker.file_unique_id, sticker_tags=tags)
             self._user_db[user.id] = effective_user
             self._user_db.save()
         origin.reply_text("Ok!")
