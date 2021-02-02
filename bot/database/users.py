@@ -87,11 +87,6 @@ class StickfixUser:
         :returns:
             Set with all the stickers that matches the tag.
         """
-        if self.cache:
-            try:
-                return set(self.cache[sticker_tag])
-            except KeyError:
-                pass
         if sticker_tag in self.stickers:
             return set(self.stickers[sticker_tag])
         return set()
