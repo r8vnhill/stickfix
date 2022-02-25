@@ -8,4 +8,4 @@ jobs:
         env: 
           TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
         run:
-          gradle build
+          Write-Output Hello
