@@ -7,3 +7,5 @@ jobs:
       - name: Setup Secret
         env: 
           TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
+        run:
+          gradle build
