@@ -4,6 +4,8 @@ jobs:
   Explore-GitHub-Actions:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Secret
+      - shell: pwsh
         env: 
           TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
+        run: |
+          Write-Output "$env:TEST_TOKEN"
