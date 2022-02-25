@@ -1,0 +1,9 @@
+name: GitHub Secrets
+on: [push]
+jobs:
+  Explore-GitHub-Actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Secret
+        env: 
+          TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
