@@ -9,6 +9,5 @@ fun main(args: Array<String>) {
   val test by parser.option(ArgType.Boolean).default(false)
   parser.parse(args)
   val tokenEnvPath = if (test) "TELEGRAM_TEST_TOKEN" else "STICKFIX_TOKEN"
-  val token = System.getenv(tokenEnvPath) ?: throw StickfixEnvException(tokenEnvPath)
-
+  StickfixBot(System.getenv(tokenEnvPath) ?: throw StickfixEnvException(tokenEnvPath)).run()
 }
