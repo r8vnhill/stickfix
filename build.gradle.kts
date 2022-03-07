@@ -26,7 +26,8 @@ dependencies {
   implementation(group = "org.jetbrains.exposed", name = "exposed-jdbc", version = "0.37.3")
   implementation(group = "org.xerial", name = "sqlite-jdbc", version = "3.30.1")
   implementation(group = "io.github.microutils", name = "kotlin-logging", version = "2.1.21")
-  runtimeOnly(group = "ch.qos.logback", name = "logback-classic", version = "1.3.0-alpha13")
+  implementation("ch.qos.logback:logback-core:1.2.10")
+  implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.3.0-alpha13")
   testImplementation(group = "org.junit.jupiter", name = "junit-jupiter-api", version = "5.8.2")
   testRuntimeOnly(group = "org.junit.jupiter", name = "junit-jupiter-engine", version = "5.8.2")
 }
