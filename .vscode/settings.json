@@ -12,5 +12,8 @@
     "latex",
     "plaintext"
   ],
-  "python.defaultInterpreterPath": "e:\\Documentos\\Code\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe"
+  "python.defaultInterpreterPath": "e:\\Documentos\\Code\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
+  "cSpell.words": [
+    "stickfix"
+  ]
 }

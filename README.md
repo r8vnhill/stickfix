@@ -1,9 +1,8 @@
 # Stickfix
 
-![http://creativecommons.org/licenses/by/4.0/](https://i.creativecommons.org/l/by/4.0/88x31.png)
+![BSD 2-Clause License](https://img.shields.io/badge/license-BSD%202--Clause-blue)
 
-This work is licensed under a 
-[Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/)
+This work is licensed under the [BSD 2-Clause "Simplified" License](https://opensource.org/licenses/BSD-2-Clause).
 
 **StickfixBot** is a Telegram bot that let's you link stickers with tags to store them and send them more easily.
 You can find it at https://t.me/stickfixbot or as `@stickfixbot` from telegram.
