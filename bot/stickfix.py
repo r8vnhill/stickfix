@@ -1,10 +1,4 @@
-""" "Stickfix" (c) by Ignacio Slater M.
-    "Stickfix" is licensed under a
-    Creative Commons Attribution 4.0 International License.
-
-    You should have received a copy of the license along with this
-    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
-"""
+from typing import Any, Dict
 
 from telegram.ext import CallbackContext, Dispatcher, JobQueue, Updater
 
@@ -16,19 +10,23 @@ from bot.utils.logger import StickfixLogger
 
 USERS_DB = "users"
 
+DataDict = Dict[str, Any]
+CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]
+
 
 class Stickfix:
-    """ Base class for @stickfixbot.
-        This class implements functions to help manage and store stickers in telegram using chat
-        commands and inline queries.
+    """Base class for @stickfixbot.
+    This class implements functions to help manage and store stickers in telegram using chat
+    commands and inline queries.
     """
-    __updater: Updater
-    __dispatcher: Dispatcher
+
+    __updater: Updater[CallbackCtx, DataDict, DataDict, DataDict]
+    __dispatcher: Dispatcher[CallbackCtx, DataDict, DataDict, DataDict]
     __logger: StickfixLogger
     __user_db: StickfixDB
 
     def __init__(self, token: str):
-        """ Initializes the bot.
+        """Initializes the bot.
 
         :param token:
             the bot's telegram token
@@ -43,17 +41,17 @@ class Stickfix:
         job_queue.run_repeating(self.__save_db, interval=5 * 60, first=0)
 
     def run(self) -> None:
-        """ Runs the bot.   """
+        """Runs the bot."""
         self.__logger.info("Starting bot polling service.")
         self.__updater.start_polling()
 
     def __start_updater(self, token: str) -> None:
-        """ Starts the bot's updater with the given token.  """
+        """Starts the bot's updater with the given token."""
         self.__logger.info(f"Starting bot updater")
         self.__updater = Updater(token, use_context=True)
 
     # noinspection PyUnusedLocal
-    def __save_db(self, context: CallbackContext):
+    def __save_db(self, context: CallbackCtx):
         self.__user_db.save()
 
     def __setup_handlers(self):
