@@ -1,17 +1,5 @@
 # Rediscovery Report
 
-## Current build & test commands
-
-- `pip install -r requirements.txt` inside a `venv` created manually (this is the legacy script referenced in the repo, but it is now deprecated).
-- `python -m bot.stickfix` runs the bot from the activated virtual environment.
-- `pytest` is used informally via the `tests/` directory, but it is not wired to a lockfile or consistent environment today.
-- Linting/formatting was previously handled by `flake8`, `isort`, and `yapf`, but granularity was brittle and configuration scattered.
-
-## Environment setup
-
-- Developers had to manually select their Python interpreter (3.9 assumed) and keep a local `venv`.
-- There was no canonical lockfile, so dependency drift was frequent and onboarding required manual installs of lint/test tooling.
-
 ## Architecture notes
 
 - `bot/stickfix.py` creates the Telegram `Updater`, binds the job queue, and registers the handler modules so every incoming command (helper, user, sticker, inline) is routed through the dispatcher.

@@ -41,3 +41,70 @@ Use `uv sync --extra db` to install the PostgreSQL stack (`psycopg`, `pgvector`,
 CI jobs should now run `uv sync`, `uv run ruff check`, and `uv run pytest`, then optionally invoke migration verification scripts. Describe any new steps in `.github/workflows`.
 
 When dependency metadata changes (new package, extra, or constraint fix), run `uv lock` locally or as part of a prow job, review the diff, and commit the updated `pyproject.toml` + `uv.lock`. This keeps the locked graph reproducible for every contributor.
+
+## Running the Bot
+
+### Prerequisites
+
+1. **Python 3.14+** — Verify with `python --version` or install via [python.org](https://www.python.org/).
+2. **uv** — Install globally: `python -m pip install --user uv` or follow [uv installation docs](https://docs.astral.sh/uv).
+3. **Telegram Bot Token** — Obtain from [@BotFather](https://t.me/botfather) on Telegram:
+   - Send `/newbot` and follow the prompts
+   - Save the API token provided
+
+### Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/r8vnhill/stickfix.git
+   cd stickfix
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   uv sync
+   ```
+
+3. **Create a token configuration file** (`secret.yml` — **never commit this**):
+   ```yaml
+   token: "YOUR_BOT_TOKEN_HERE"
+   ```
+
+4. **Create the bot entry point** (`bot.py` — **gitignored**):
+   ```python
+   from bot.stickfix import Stickfix
+   import yaml
+
+   with open('secret.yml') as f:
+       token = yaml.safe_load(f)['token']
+
+   Stickfix(token).run()
+   ```
+
+### Running
+
+Start the bot with:
+```bash
+uv run python bot.py
+```
+
+The bot will:
+- Create `data/users.yaml` for sticker storage (auto-backed up every 5 minutes)
+- Create `logs/stickfix.log` for logging
+- Listen for commands and inline queries on Telegram
+
+Press `Ctrl+C` to stop the bot gracefully.
+
+### Verifying the Bot
+
+1. Open Telegram and search for your bot by username
+2. Send `/start` or `/help` to see available commands
+3. Try adding a sticker with `/add tag1 tag2` (reply to a sticker)
+4. Test inline queries by typing `@yourbotusername tag1` in any chat
+
+### Troubleshooting
+
+- **Import errors**: Run `uv sync` to ensure all dependencies are installed
+- **Token errors**: Verify your token in `secret.yml` matches the one from BotFather
+- **Permission errors**: Ensure `data/` and `logs/` directories are writable
+- **Bot not responding**: Check `logs/stickfix.log` for error messages
