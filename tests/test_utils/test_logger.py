@@ -4,6 +4,7 @@ BDD/property tests for the stickfix logger configuration.
 
 from __future__ import annotations
 
+# ruff: noqa: S101
 import logging
 import string
 import uuid
@@ -122,6 +123,7 @@ def assert_file_handler(logger_state: LoggerState) -> None:
 @bdd_then("the log file is created")
 def assert_log_file_created(logger_state: LoggerState) -> None:
     assert isinstance(logger_state.config, LoggerConfig)
+    assert logger_state.config.log_path is not None
     assert logger_state.config.log_path.exists()
 
 
@@ -146,3 +148,51 @@ def test_logger_creates_nested_paths(segments: List[str]) -> None:
             assert log_path.parent.exists()
         finally:
             _reset_logger(logger_name)
+
+
+def test_logger_skips_file_handler_when_log_path_is_none(tmp_path: Path) -> None:
+    logger_name = f"stickfix.no-file.{uuid.uuid4().hex}"
+    config = LoggerConfig(log_path=None)
+
+    try:
+        StickfixLogger(logger_name, config=config)
+        logger = _get_logger(logger_name)
+        assert _count_handlers(logger, lambda h: isinstance(h, RotatingFileHandler)) == 0
+        assert _count_handlers(logger, lambda h: type(h) is logging.StreamHandler) == 1
+        assert not any(tmp_path.iterdir())
+    finally:
+        _reset_logger(logger_name)
+
+
+def test_logger_uses_env_flag_to_disable_default_file_logging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logger_name = f"stickfix.env-disabled.{uuid.uuid4().hex}"
+    monkeypatch.setenv("STICKFIX_DISABLE_FILE_LOGGING", "1")
+    monkeypatch.delenv("STICKFIX_LOG_PATH", raising=False)
+
+    try:
+        StickfixLogger(logger_name)
+        logger = _get_logger(logger_name)
+        assert _count_handlers(logger, lambda h: isinstance(h, RotatingFileHandler)) == 0
+        assert _count_handlers(logger, lambda h: type(h) is logging.StreamHandler) == 1
+    finally:
+        _reset_logger(logger_name)
+
+
+def test_logger_uses_env_log_path_for_default_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    logger_name = f"stickfix.env-path.{uuid.uuid4().hex}"
+    log_path = tmp_path / "env.log"
+    monkeypatch.delenv("STICKFIX_DISABLE_FILE_LOGGING", raising=False)
+    monkeypatch.setenv("STICKFIX_LOG_PATH", str(log_path))
+
+    try:
+        StickfixLogger(logger_name)
+        logger = _get_logger(logger_name)
+        assert _count_handlers(logger, lambda h: isinstance(h, RotatingFileHandler)) == 1
+        logger.info("env path test")
+        assert log_path.exists()
+    finally:
+        _reset_logger(logger_name)

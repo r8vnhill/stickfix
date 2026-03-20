@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
+
+DEFAULT_LOG_PATH = Path("logs") / "stickfix.log"
+LOG_PATH_ENVVAR = "STICKFIX_LOG_PATH"
+DISABLE_FILE_LOGGING_ENVVAR = "STICKFIX_DISABLE_FILE_LOGGING"
 
 
 @dataclass(frozen=True)
@@ -12,7 +17,7 @@ class LoggerConfig:
     console_level: int = logging.DEBUG
     file_level: int = logging.INFO
     level: int = logging.DEBUG
-    log_path: Path = Path("logs") / "stickfix.log"
+    log_path: Path | None = DEFAULT_LOG_PATH
     max_bytes: int = 50_000
     backup_count: int = 2
     console_format: str = "%(levelname)s:%(name)s:%(message)s"
@@ -23,7 +28,7 @@ class StickfixLogger:
     """Simple facade that ensures bot logging is configured once per logger name."""
 
     def __init__(self, context: str, *, config: LoggerConfig | None = None):
-        self.__config = config or LoggerConfig()
+        self.__config = config or self.__default_config()
         self.__logger = self.__configure_logger(context)
 
     def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
@@ -52,6 +57,17 @@ class StickfixLogger:
         """Expose the configured logger for advanced integrations or tests."""
         return self.__logger
 
+    @staticmethod
+    def __default_config() -> LoggerConfig:
+        if os.environ.get(DISABLE_FILE_LOGGING_ENVVAR, "").strip() == "1":
+            return LoggerConfig(log_path=None)
+
+        log_path_value = os.environ.get(LOG_PATH_ENVVAR, "").strip()
+        if log_path_value:
+            return LoggerConfig(log_path=Path(log_path_value))
+
+        return LoggerConfig()
+
     def __configure_logger(self, context: str) -> logging.Logger:
         logger = logging.getLogger(context)
         logger.setLevel(self.__config.level)
@@ -64,6 +80,9 @@ class StickfixLogger:
             console.setLevel(self.__config.console_level)
             console.setFormatter(logging.Formatter(self.__config.console_format))
             logger.addHandler(console)
+
+        if self.__config.log_path is None:
+            return
 
         if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
             self.__config.log_path.parent.mkdir(parents=True, exist_ok=True)
