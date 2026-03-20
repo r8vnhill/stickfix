@@ -14,7 +14,7 @@ from telegram import InlineQuery, InlineQueryResult, InlineQueryResultArticle, \
 from telegram.ext import CallbackContext, ChosenInlineResultHandler, Dispatcher, InlineQueryHandler
 
 from bot.database.storage import StickfixDB
-from bot.database.users import SF_PUBLIC, StickfixUser
+from bot.domain.user import SF_PUBLIC, StickfixUser
 from bot.handlers.common import HELP_PATH, StickfixHandler
 from bot.utils.errors import unexpected_error
 from bot.utils.logger import StickfixLogger

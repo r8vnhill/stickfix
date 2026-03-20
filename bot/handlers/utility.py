@@ -9,7 +9,7 @@ from telegram import ParseMode, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.database.storage import StickfixDB
-from bot.database.users import Switch, UserModes
+from bot.domain.user import Switch, UserModes
 from bot.handlers.common import HELP_PATH, StickfixHandler
 from bot.utils.errors import InputException, unexpected_error
 from bot.utils.logger import StickfixLogger

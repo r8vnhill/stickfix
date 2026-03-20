@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Final
 
 from telegram.ext import CallbackContext, Dispatcher, JobQueue, Updater
 
@@ -8,7 +8,7 @@ from bot.handlers.stickers import StickerHandler
 from bot.handlers.utility import HelperHandler, UserHandler
 from bot.utils.logger import StickfixLogger
 
-USERS_DB = "users"
+USERS_DB: Final[str] = "users"
 
 DataDict = dict[str, Any]
 CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]

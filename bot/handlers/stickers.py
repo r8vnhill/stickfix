@@ -12,7 +12,7 @@ from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.database.storage import StickfixDB
-from bot.database.users import SF_PUBLIC, UserModes
+from bot.domain.user import SF_PUBLIC, UserModes
 from bot.handlers.common import StickfixHandler
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
 from bot.utils.logger import StickfixLogger
@@ -86,10 +86,10 @@ class StickerHandler(StickfixHandler):
             tags = context.args
             sf_user = self._user_db[user.id] if user.id in self._user_db else self._user_db[
                 SF_PUBLIC]
-            if not sf_user.private_mode:
-                sf_user = self._user_db[SF_PUBLIC]
-            sf_user.unlink_sticker(sticker.file_id, tags)
-            self._user_db[user.id] = sf_user
+            public_user = self._user_db[SF_PUBLIC] if SF_PUBLIC in self._user_db else None
+            effective_user = sf_user.get_effective_pack(public_user=public_user)
+            sf_user.unlink_sticker_from_pack(sticker.file_id, tags, public_user=public_user)
+            self._user_db[effective_user.id] = effective_user
         except NoStickerException:
             logger.debug("Handled error.")
         except Exception as e:
@@ -101,7 +101,8 @@ class StickerHandler(StickfixHandler):
             user_id = origin.from_user.id
             user = self._user_db[user_id] if user_id in self._user_db else self._user_db[
                 SF_PUBLIC]
-            effective_user = user if user.private_mode else self._user_db[SF_PUBLIC]
-            effective_user.add_sticker(sticker_id=sticker.file_id, sticker_tags=tags)
-            self._user_db[user.id] = effective_user
+            public_user = self._user_db[SF_PUBLIC] if SF_PUBLIC in self._user_db else None
+            effective_user = user.get_effective_pack(public_user=public_user)
+            user.link_sticker(sticker_id=sticker.file_id, sticker_tags=tags, public_user=public_user)
+            self._user_db[effective_user.id] = effective_user
         origin.reply_text("Ok!")

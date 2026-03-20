@@ -36,8 +36,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/stickfix"
-Repository = "https://github.com/your-org/stickfix"
+Homepage = "https://github.com/r8vnhill/stickfix"
+Repository = "https://github.com/r8vnhill/stickfix"
 
 [tool.setuptools]
 py-modules = ["imghdr"]

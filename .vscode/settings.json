@@ -2,7 +2,15 @@
   "workbench.colorCustomizations": {
     "activityBar.background": "#161E7A",
     "titleBar.activeBackground": "#1F2AAB",
-    "titleBar.activeForeground": "#FAFBFE"
+    "titleBar.activeForeground": "#FAFBFE",
+    "titleBar.inactiveBackground": "#161E7A",
+    "titleBar.inactiveForeground": "#FAFBFE",
+    "statusBar.background": "#161E7A",
+    "statusBar.foreground": "#FAFBFE",
+    "statusBar.debuggingBackground": "#161E7A",
+    "statusBar.debuggingForeground": "#FAFBFE",
+    "statusBar.noFolderBackground": "#161E7A",
+    "statusBar.noFolderForeground": "#FAFBFE"
   },
   "spellright.language": [
     "en"
@@ -12,10 +20,11 @@
     "latex",
     "plaintext"
   ],
-  "python.defaultInterpreterPath": "e:\\Documentos\\Code\\APPLICATIONS\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
+  "python.defaultInterpreterPath": "e:\\dev\\APPLICATIONS\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
   "cSpell.words": [
     "autouse",
     "levelname",
-    "stickfix"
+    "stickfix",
+    "stickfixbot"
   ]
 }

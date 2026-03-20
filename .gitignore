@@ -298,3 +298,5 @@ bot.py
 secret.yml
 *.yaml
 data/users.yaml
+
+~todo.md

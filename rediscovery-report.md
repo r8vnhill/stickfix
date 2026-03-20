@@ -4,7 +4,7 @@
 
 - `bot/stickfix.py` creates the Telegram `Updater`, binds the job queue, and registers the handler modules so every incoming command (helper, user, sticker, inline) is routed through the dispatcher.
 - Handler modules (`bot/handlers/common.py`, `utility.py`, `stickers.py`, `inline.py`) implement command parsing, context helpers, and inline scoring logic, keeping UI concerns separated from persistence.
-- Persistence relies on `bot/database/storage.py`, a YAML-backed `StickfixDB`, with `StickfixUser` objects in `bot/database/users.py` mapping tags to stickers and persisting user preferences such as `shuffle` and `private_mode`.
+- Persistence relies on `bot/database/storage.py`, a YAML-backed `StickfixDB`, with `StickfixUser` now defined in `bot/domain/user.py` and re-exported from `bot/database/users.py` for compatibility while persisting sticker tags plus user preferences such as `shuffle` and `private_mode`.
 - Logging comes from `bot/utils/logger.py`, ensuring consistent formatting for lifecycle events (startup, DB saves, request handling).
 - The lightweight `tests/` directory exercises this stack, so a stable uv/Ruff workflow will indirectly guarantee handler/storage invariants remain covered.
 
