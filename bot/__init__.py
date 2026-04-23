@@ -1,7 +1,3 @@
-"""
-Package init for the bot app semantics.
-"""
+"""Top-level package for Stickfix."""
 
-from . import database, stickfix, utils
-
-__all__ = ["stickfix", "database", "utils"]
+__all__ = ["application", "database", "domain", "stickfix", "utils"]
