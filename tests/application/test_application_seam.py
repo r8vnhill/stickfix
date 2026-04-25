@@ -2,21 +2,34 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from dataclasses import is_dataclass
 
-from bot.application import errors, requests, results
-from bot.application.ports import UserRepository
+from hamcrest import assert_that, equal_to, has_item, is_, is_not, none
+
 from bot.database.storage import StickfixDB
 from bot.domain import SF_PUBLIC, StickfixUser
 
 
 def test_application_modules_import_without_loading_telegram() -> None:
-    assert "telegram" not in sys.modules
-    assert "telegram.ext" not in sys.modules
+    before = set(sys.modules)
+
+    importlib.import_module("bot.application")
+    importlib.import_module("bot.application.errors")
+    importlib.import_module("bot.application.requests")
+    importlib.import_module("bot.application.results")
+    importlib.import_module("bot.application.ports")
+    importlib.import_module("bot.application.use_cases")
+
+    added = set(sys.modules) - before
+    assert_that(added, is_not(has_item("telegram")))
+    assert_that(added, is_not(has_item("telegram.ext")))
 
 
 def test_request_and_result_types_are_dataclasses() -> None:
+    requests = importlib.import_module("bot.application.requests")
+    results = importlib.import_module("bot.application.results")
     request_types = [
         requests.AddStickerCommand,
         requests.GetStickersQuery,
@@ -33,18 +46,21 @@ def test_request_and_result_types_are_dataclasses() -> None:
         results.InlineQueryResult,
     ]
 
-    assert all(is_dataclass(dto_type) for dto_type in request_types + result_types)
+    actual = [is_dataclass(dto_type) for dto_type in request_types + result_types]
+    assert_that(actual, equal_to([True] * len(actual)))
 
 
 def test_application_error_hierarchy_is_shallow_and_explicit() -> None:
-    assert issubclass(errors.InvalidCommandInputError, errors.ApplicationError)
-    assert issubclass(errors.WrongInteractionContextError, errors.ApplicationError)
-    assert issubclass(errors.MissingStickerError, errors.ApplicationError)
-    assert issubclass(errors.MissingReplyStickerError, errors.ApplicationError)
-    assert issubclass(errors.UserNotFoundError, errors.ApplicationError)
+    errors = importlib.import_module("bot.application.errors")
+    assert_that(issubclass(errors.InvalidCommandInputError, errors.ApplicationError), is_(True))
+    assert_that(issubclass(errors.WrongInteractionContextError, errors.ApplicationError), is_(True))
+    assert_that(issubclass(errors.MissingStickerError, errors.ApplicationError), is_(True))
+    assert_that(issubclass(errors.MissingReplyStickerError, errors.ApplicationError), is_(True))
+    assert_that(issubclass(errors.UserNotFoundError, errors.ApplicationError), is_(True))
 
 
 def test_repository_port_can_be_targeted_by_a_small_adapter_for_stickfixdb(tmp_path) -> None:
+    ports = importlib.import_module("bot.application.ports")
     store = StickfixDB("users", data_dir=tmp_path)
 
     class StickfixDbRepositoryAdapter:
@@ -78,8 +94,8 @@ def test_repository_port_can_be_targeted_by_a_small_adapter_for_stickfixdb(tmp_p
 
     adapter = StickfixDbRepositoryAdapter(store)
 
-    assert isinstance(adapter, UserRepository)
-    assert adapter.get_user("missing") is None
-    assert not adapter.has_user("missing")
-    assert adapter.get_public_pack() is None
-    assert adapter.ensure_public_pack().id == SF_PUBLIC
+    assert_that(isinstance(adapter, ports.UserRepository), is_(True))
+    assert_that(adapter.get_user("missing"), none())
+    assert_that(adapter.has_user("missing"), is_(False))
+    assert_that(adapter.get_public_pack(), none())
+    assert_that(adapter.ensure_public_pack().id, is_(SF_PUBLIC))

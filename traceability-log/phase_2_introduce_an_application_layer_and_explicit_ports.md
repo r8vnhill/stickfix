@@ -7,6 +7,7 @@ Implement Phase 2 by introducing a small application layer that owns command/que
 Current status:
 
 * Step 1 is implemented in `bot/application/` and covered by seam-level tests in `tests/application/test_application_seam.py`
+* Step 2 is implemented for `/setMode`: `bot.application.use_cases.SetMode` owns mode validation and mutation, `StickfixUserRepository` adapts the legacy store to `UserRepository`, and `UserHandler.__set_mode` is now a Telegram adapter
 * subsequent steps in this document remain pending
 
 This phase is intentionally conservative:
@@ -361,13 +362,21 @@ This is important: Phase 2 should add a new seam, not rewrite unrelated logic.
 
 Implement this phase incrementally to reduce breakage risk.
 
-### Step 1
+### ~~Step 1~~
 
 Add DTOs, ports, and error types.
 
-### Step 2
+### ~~Step 2~~
 
 Extract one small vertical slice first, preferably `/setMode` or `/shuffle`, because they have narrow scope and clear validation rules.
+
+Implemented for `/setMode`.
+
+Notes:
+
+* the application use case validates `private`/`public`, creates missing users only after valid input, mutates `private_mode`, and saves through `UserRepository`
+* the handler preserves existing replies: valid modes reply `Leave it to me!`, invalid modes use the existing Markdown syntax error, and missing mode remains a no-op
+* `/shuffle` remains unchanged and should be extracted in a later step
 
 ### Step 3
 

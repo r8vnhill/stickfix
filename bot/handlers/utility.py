@@ -8,12 +8,16 @@
 from telegram import ParseMode, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
+from bot.application.errors import InvalidCommandInputError
+from bot.application.requests import SetModeCommand
+from bot.application.use_cases import SetMode
 from bot.database.storage import StickfixDB
-from bot.domain.user import Switch, UserModes
+from bot.domain.user import Switch
 from bot.handlers.common import HELP_PATH, StickfixHandler
-from bot.utils.errors import InputException, unexpected_error
+from bot.infrastructure.persistence import StickfixUserRepository
+from bot.utils.errors import unexpected_error
 from bot.utils.logger import StickfixLogger
-from bot.utils.messages import Commands, get_message_meta, raise_input_error
+from bot.utils.messages import Commands, get_message_meta
 
 logger = StickfixLogger(__name__)
 
@@ -48,6 +52,7 @@ class HelperHandler(StickfixHandler):
 class UserHandler(StickfixHandler):
     def __init__(self, dispatcher: Dispatcher, user_db: StickfixDB):
         super().__init__(dispatcher, user_db)
+        self.__set_mode_use_case = SetMode(StickfixUserRepository(user_db))
         self._dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
         self._dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
         self._dispatcher.add_handler(CommandHandler(Commands.SHUFFLE, self.__set_shuffle,
@@ -70,22 +75,15 @@ class UserHandler(StickfixHandler):
         try:
             message, user, chat = get_message_meta(update)
             if context.args:
-                if user.id not in self._user_db:
-                    self._create_user(user.id)
                 mode = context.args[0]
-                sf_user = self._user_db[user.id]
-                if mode == UserModes.PRIVATE or mode == UserModes.PUBLIC:
-                    sf_user.private_mode = mode == UserModes.PRIVATE
-                    message.reply_text("Leave it to me!")
-                    logger.info(f"Changed {user.username} to {mode} mode.")
-                else:
-                    message.reply_markdown(
-                        "Sorry, I didn't understand. This command syntax is `/setMode private` "
-                        "or `setMode public`.")
-                    raise_input_error(cause=f"{mode} is not a valid argument.",
-                                      msg=f"Command /setMode called by user {user.username} "
-                                          f"raised an exception.")
-        except InputException:
+                command = SetModeCommand(user_id=user.id, mode=mode)
+                self.__set_mode_use_case(command)
+                message.reply_text("Leave it to me!")
+                logger.info(f"Changed {user.username} to {mode} mode.")
+        except InvalidCommandInputError:
+            message.reply_markdown(
+                "Sorry, I didn't understand. This command syntax is `/setMode private` "
+                "or `setMode public`.")
             logger.debug("Handled exception.")
         except Exception as e:
             unexpected_error(e, logger)
