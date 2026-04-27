@@ -42,6 +42,8 @@ def test_request_and_result_types_are_dataclasses() -> None:
     ]
     result_types = [
         results.AcknowledgementResult,
+        results.AddStickerResult,
+        results.DeleteStickerResult,
         results.GetStickersResult,
         results.InlineQueryResult,
     ]

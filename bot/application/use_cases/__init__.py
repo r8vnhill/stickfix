@@ -1,15 +1,14 @@
-"""Application use cases: Telegram-free business logic.
+"""Public import surface for Telegram-free application use cases.
 
-This package contains callable use case classes that encapsulate user-facing
-commands and flows (e.g., changing mode, adding stickers, retrieving stickers).
-Use cases accept transport-agnostic request DTOs and return result/error types,
-allowing Telegram handlers to remain thin adapters.
-
-Handlers instantiate use cases with infrastructure dependencies (e.g., user
-repository) and invoke them with parsed command data. Tests import and invoke
-use cases with in-memory fakes, achieving testability independent of Telegram.
+This package re-exports the callable use case classes that implement the user-facing flows for
+Stickfix, such as changing mode and managing stickers. Handlers import from here so they can stay
+thin adapters over transport-agnostic request/result DTOs, while tests can exercise the same classes
+with in-memory fakes.
 """
 
+from .add_sticker import AddSticker
+from .delete_sticker import DeleteSticker
+from .get_stickers import GetStickers
 from .set_mode import SetMode
 
-__all__ = ["SetMode"]
+__all__ = ["AddSticker", "DeleteSticker", "GetStickers", "SetMode"]

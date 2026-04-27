@@ -46,3 +46,16 @@ py-modules = ["imghdr"]
 [tool.setuptools.packages.find]
 include = ["bot"]
 exclude = ["tests", "data", "logs"]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+    ".git",
+    ".hypothesis",
+    ".pytest-tmp",
+    ".pytest_cache",
+    ".venv",
+    "data",
+    "logs",
+    "venv",
+    "worktmp",
+]

@@ -12,6 +12,20 @@ class AcknowledgementResult:
 
 
 @dataclass(frozen=True, slots=True)
+class AddStickerResult:
+    sticker_id: str
+    effective_tags: tuple[str, ...] = field(default_factory=tuple)
+    changed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteStickerResult:
+    sticker_id: str
+    effective_tags: tuple[str, ...] = field(default_factory=tuple)
+    changed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class GetStickersResult:
     sticker_ids: tuple[str, ...] = field(default_factory=tuple)
 

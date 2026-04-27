@@ -112,8 +112,9 @@ The current architecture introduces an explicit application seam:
 - `bot.application.results` defines result types for successful application flows.
 - `bot.application.errors` defines Telegram-free application failures.
 - `bot.application.ports.user_repository.UserRepository` defines the first outbound repository port.
+- `bot.domain.services.StickerPackService` centralizes Telegram-free sticker pack resolution and mutation for the extracted sticker commands.
 
-Handlers and runtime wiring currently preserve the existing behavior and YAML persistence model.
+Handlers and runtime wiring currently preserve the existing behavior and YAML persistence model. `/setMode`, `/add`, `/get`, and `/deleteFrom` now execute through application use cases while handlers remain responsible for Telegram-specific parsing and replies.
 
 ## Development
 

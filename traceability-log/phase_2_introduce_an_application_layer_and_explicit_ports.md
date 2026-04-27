@@ -8,6 +8,7 @@ Current status:
 
 * Step 1 is implemented in `bot/application/` and covered by seam-level tests in `tests/application/test_application_seam.py`
 * Step 2 is implemented for `/setMode`: `bot.application.use_cases.SetMode` owns mode validation and mutation, `StickfixUserRepository` adapts the legacy store to `UserRepository`, and `UserHandler.__set_mode` is now a Telegram adapter
+* Step 3 is implemented for `/add`, `/get`, and `/deleteFrom`: application use cases own sticker command orchestration, `StickerPackService` centralizes Telegram-free effective-pack behavior, and `StickerHandler` now maps Telegram input/output to request/result DTOs
 * subsequent steps in this document remain pending
 
 This phase is intentionally conservative:
@@ -378,9 +379,21 @@ Notes:
 * the handler preserves existing replies: valid modes reply `Leave it to me!`, invalid modes use the existing Markdown syntax error, and missing mode remains a no-op
 * `/shuffle` remains unchanged and should be extracted in a later step
 
-### Step 3
+### ~~Step 3~~
 
 Extract `/add`, `/get`, and `/deleteFrom`, since they exercise the main pack-resolution behavior.
+
+Implemented for the sticker command slice.
+
+Notes:
+
+* `AddSticker`, `GetStickers`, and `DeleteSticker` now live in `bot/application/use_cases/`
+* `StickerPackService` centralizes effective-pack resolution, link/unlink behavior, and sticker lookup without importing Telegram or persistence details
+* `StickerHandler` keeps Telegram reply/sticker validation, exact reply wording, sticker sending, and error-to-reply mapping
+* `/add` still ensures `SF_PUBLIC`, falls back to sticker emoji tags, and replies `Ok!`
+* `/get` still rejects non-private chats with the existing reply and leaves sticker sending in the handler
+* `/deleteFrom` still succeeds silently
+* regression coverage was added for the domain service, application use cases, handler adapter behavior, and application seam
 
 ### Step 4
 
