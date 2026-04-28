@@ -1,30 +1,31 @@
 {
-  "workbench.colorCustomizations": {
-    "activityBar.background": "#161E7A",
-    "titleBar.activeBackground": "#1F2AAB",
-    "titleBar.activeForeground": "#FAFBFE",
-    "titleBar.inactiveBackground": "#161E7A",
-    "titleBar.inactiveForeground": "#FAFBFE",
-    "statusBar.background": "#161E7A",
-    "statusBar.foreground": "#FAFBFE",
-    "statusBar.debuggingBackground": "#161E7A",
-    "statusBar.debuggingForeground": "#FAFBFE",
-    "statusBar.noFolderBackground": "#161E7A",
-    "statusBar.noFolderForeground": "#FAFBFE"
-  },
-  "spellright.language": [
-    "en"
-  ],
-  "spellright.documentTypes": [
-    "markdown",
-    "latex",
-    "plaintext"
-  ],
-  "python.defaultInterpreterPath": "e:\\dev\\APPLICATIONS\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
   "cSpell.words": [
     "autouse",
     "levelname",
     "stickfix",
     "stickfixbot"
-  ]
+  ],
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "spellright.documentTypes": [
+    "markdown",
+    "latex",
+    "plaintext"
+  ],
+  "spellright.language": [
+    "en"
+  ],
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#161E7A",
+    "statusBar.background": "#161E7A",
+    "statusBar.debuggingBackground": "#161E7A",
+    "statusBar.debuggingForeground": "#FAFBFE",
+    "statusBar.foreground": "#FAFBFE",
+    "statusBar.noFolderBackground": "#161E7A",
+    "statusBar.noFolderForeground": "#FAFBFE",
+    "titleBar.activeBackground": "#1F2AAB",
+    "titleBar.activeForeground": "#FAFBFE",
+    "titleBar.inactiveBackground": "#161E7A",
+    "titleBar.inactiveForeground": "#FAFBFE"
+  },
+  "workbench.colorTheme": "Tokyo Night"
 }
