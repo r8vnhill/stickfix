@@ -5,7 +5,7 @@
     "stickfix",
     "stickfixbot"
   ],
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.defaultInterpreterPath": "e:\\dev\\APPLICATIONS\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
   "spellright.documentTypes": [
     "markdown",
     "latex",
@@ -27,5 +27,9 @@
     "titleBar.inactiveBackground": "#161E7A",
     "titleBar.inactiveForeground": "#FAFBFE"
   },
-  "workbench.colorTheme": "Tokyo Night"
+  "workbench.colorTheme": "Tokyo Night",
+  "[python]": {
+    "editor.wordWrap": "wordWrapColumn",
+    "editor.wordWrapColumn": 100
+  }
 }

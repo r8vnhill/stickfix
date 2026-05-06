@@ -35,5 +35,6 @@ class InlineQueryResult:
     sticker_ids: tuple[str, ...] = field(default_factory=tuple)
     default_tags: tuple[str, ...] = field(default_factory=tuple)
     show_default_help: bool = False
+    help_text: str | None = None
     next_offset: int = 0
     cache_cleared: bool = False

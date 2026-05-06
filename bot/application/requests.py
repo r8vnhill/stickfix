@@ -53,7 +53,7 @@ class DeleteUserCommand:
 
 @dataclass(frozen=True, slots=True)
 class InlineQueryRequest:
-    user_id: str
+    user_id: str | None
     query_text: str
     offset: int = 0
     limit: int = 49

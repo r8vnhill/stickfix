@@ -7,6 +7,7 @@ Extract inline query lookup and chosen-result cache clearing from `InlineHandler
 Current status:
 
 - Cycle 1 is implemented in `tests/handlers/test_inline_handler.py`.
+- Cycle 2 is implemented: `HelpContentProvider` port and `FileHelpContentProvider` adapter added (see [plan_cycle_2_add_helpcontentprovider.md](plan_cycle_2_add_helpcontentprovider.md)).
 - Characterization found two compatibility quirks that later cycles must preserve unless the maintainer explicitly chooses otherwise:
   - inline sticker result ordering follows current set materialization and must not be made deterministic accidentally;
   - public-mode existing users currently resolve matching stickers from both their own pack and `SF_PUBLIC`.
@@ -301,16 +302,24 @@ Compatibility notes from this cycle:
 - existing public-mode users currently return the union of their own matching stickers and public-pack matches;
 - pagination is locked by count and legacy `next_offset = offset + 49`, not by a sorted sticker order.
 
-### Cycle 2: Add `HelpContentProvider`
+### ~~Cycle 2: Add `HelpContentProvider`~~
 
-Add tests for the filesystem adapter:
+Implemented. See [plan_cycle_2_add_helpcontentprovider.md](plan_cycle_2_add_helpcontentprovider.md) for details.
 
-- reads the configured file with UTF-8;
-- returns the file content unchanged.
+**Implementation Summary:**
 
-Keep this adapter thin. The use case should depend on the port, not on `Path` or `HELP_PATH`.
+- Added `HelpContentProvider` protocol in `bot/application/ports/help_content.py`.
+- Added `FileHelpContentProvider` adapter in `bot/infrastructure/help/file_help_content_provider.py`.
+- Added comprehensive tests in `tests/infrastructure/help/test_file_help_content_provider.py`:
+  - reads the configured file with UTF-8;
+  - returns the file content unchanged;
+  - does not cache stale content (re-reads on each call);
+  - raises `FileNotFoundError` when file is missing;
+  - preserves whitespace and special characters.
+- Verified application seam: no Telegram imports in `bot/application/`.
+- All 92 project tests pass with no regressions.
 
-### Cycle 3: Add `ResolveInlineQuery`
+### ~~Cycle 3: Add `ResolveInlineQuery`~~
 
 Add application tests using fake repositories and fake help providers.
 
