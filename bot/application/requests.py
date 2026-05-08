@@ -61,5 +61,5 @@ class InlineQueryRequest:
 
 @dataclass(frozen=True, slots=True)
 class ClearInlineCacheCommand:
-    user_id: str
+    user_id: str | None
     query_text: str = ""

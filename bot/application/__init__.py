@@ -1,31 +1,19 @@
-"""Application-layer contracts for Stickfix.
+"""Package-level export surface for application-layer contracts.
 
-This package defines the application layer in hexagonal architecture:
+This module re-exports commonly used application errors, DTOs, and selected results so callers can
+import from one stable namespace when needed.
 
-    Handlers (bot/handlers/)
-        ↓ parse Telegram, build request DTOs
-    Use Cases (bot/application/use_cases/)
-        ↓ implement business logic, depend on ports
-    Ports (bot/application/ports/)
-        ↓ abstract contracts for infrastructure
-    Infrastructure Adapters (bot/infrastructure/)
-        ↓ concrete implementations (YAML, database, etc.)
+## Contract:
 
-Key responsibilities:
-  - Use cases: Stateless request/response handlers that implement business rules
-  - Ports: Protocol-based interfaces that use cases depend on
-  - Errors: Application-specific exceptions with Telegram-free contexts
-  - DTOs: Request and result types that cross the handler/application boundary
+- keep exports Telegram-free (validated by seam tests that import ``bot.application``)
+- treat ``__all__`` as the supported package-level API for compatibility
+- avoid business logic here; implementation lives in submodules such as ``requests``, ``results``,
+  ``errors``, and ``use_cases``
 
-Constraints:
-  - Application must not import telegram or Telegram-specific types
-  - Domain layer (bot/domain/) must not import application or handlers
-  - Handlers may import all layers but only call use cases via DTOs
+## Integration points:
 
-This separation enables:
-  - Testing use cases without Telegram objects
-  - Replacing storage backends by swapping adapters
-  - Reusing application logic for multiple interfaces (CLI, API, webhooks, etc.)
+- application seam tests import this package directly
+- handlers and use-case tests usually import specific submodules
 """
 
 from .errors import (
@@ -47,11 +35,13 @@ from .requests import (
     SetShuffleCommand,
 )
 from .results import AcknowledgementResult, GetStickersResult, InlineQueryResult
+from .use_cases import ClearInlineCache
 
 __all__ = [
     "AcknowledgementResult",
     "AddStickerCommand",
     "ApplicationError",
+    "ClearInlineCache",
     "ClearInlineCacheCommand",
     "DeleteStickerCommand",
     "DeleteUserCommand",

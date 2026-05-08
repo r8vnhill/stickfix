@@ -9,6 +9,7 @@ Current status:
 * Step 1 is implemented in `bot/application/` and covered by seam-level tests in `tests/application/test_application_seam.py`
 * Step 2 is implemented for `/setMode`: `bot.application.use_cases.SetMode` owns mode validation and mutation, `StickfixUserRepository` adapts the legacy store to `UserRepository`, and `UserHandler.__set_mode` is now a Telegram adapter
 * Step 3 is implemented for `/add`, `/get`, and `/deleteFrom`: application use cases own sticker command orchestration, `StickerPackService` centralizes Telegram-free effective-pack behavior, and `StickerHandler` now maps Telegram input/output to request/result DTOs
+* Step 4 is partially implemented: `HelpContentProvider`, `ResolveInlineQuery`, and `ClearInlineCache` exist in the application layer; `InlineHandler` rewiring remains pending
 * subsequent steps in this document remain pending
 
 This phase is intentionally conservative:
@@ -398,6 +399,13 @@ Notes:
 ### Step 4
 
 Extract inline query and chosen-result cache clearing.
+
+Progress:
+
+* `HelpContentProvider` and `FileHelpContentProvider` are implemented.
+* `ResolveInlineQuery` is implemented and tested as a Telegram-free use case.
+* `ClearInlineCache` is implemented and tested as a Telegram-free use case.
+* Rewiring `InlineHandler` to call these use cases remains pending.
 
 ### Step 5
 

@@ -8,6 +8,8 @@ Current status:
 
 - Cycle 1 is implemented in `tests/handlers/test_inline_handler.py`.
 - Cycle 2 is implemented: `HelpContentProvider` port and `FileHelpContentProvider` adapter added (see [plan_cycle_2_add_helpcontentprovider.md](plan_cycle_2_add_helpcontentprovider.md)).
+- Cycle 3 is implemented: `ResolveInlineQuery` owns inline query resolution semantics (see [closed/2026/05/06/cycle_3_add_resolveinlinequery.md](closed/2026/05/06/cycle_3_add_resolveinlinequery.md)).
+- Cycle 4 is implemented: `ClearInlineCache` owns chosen-result cache clearing semantics (see [cycle_4_add_clearinlinecache.md](cycle_4_add_clearinlinecache.md)).
 - Characterization found two compatibility quirks that later cycles must preserve unless the maintainer explicitly chooses otherwise:
   - inline sticker result ordering follows current set materialization and must not be made deterministic accidentally;
   - public-mode existing users currently resolve matching stickers from both their own pack and `SF_PUBLIC`.
@@ -342,17 +344,18 @@ BDD examples:
 
 Use data-driven tests for repeated public/private/missing-user resolution cases.
 
-### Cycle 4: Add `ClearInlineCache`
+### ~~Cycle 4: Add `ClearInlineCache`~~
 
-Add application tests using fake repositories.
+Implemented. See [cycle_4_add_clearinlinecache.md](cycle_4_add_clearinlinecache.md) for details.
 
-BDD examples:
+**Implementation Summary:**
 
-- clears an existing private user cache and saves that user;
-- clears public pack cache for missing user;
-- clears public pack cache for public-mode user;
-- returns `InlineCacheCleared(cache_cleared=True)`;
-- does not import or construct Telegram objects.
+- Added `ClearInlineCache` in `bot/application/use_cases/clear_inline_cache.py`.
+- Updated `ClearInlineCacheCommand.user_id` to accept `str | None`.
+- Reused `UserRepository` and `StickerPackService.resolve_effective_pack(...)` for effective cache owner resolution.
+- Returned `AcknowledgementResult(acknowledged=True)`.
+- Added application use-case tests for private/public/missing user behavior, missing public-pack fallback, ignored `query_text`, exact save target, and unrelated cache preservation.
+- Verified the application seam and Ruff checks for the touched application code.
 
 ### Cycle 5: Rewire `InlineHandler`
 
