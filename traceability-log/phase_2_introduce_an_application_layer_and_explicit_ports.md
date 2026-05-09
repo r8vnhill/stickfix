@@ -396,7 +396,7 @@ Notes:
 * `/deleteFrom` still succeeds silently
 * regression coverage was added for the domain service, application use cases, handler adapter behavior, and application seam
 
-### Step 4
+### ~~Step 4~~
 
 Extract inline query and chosen-result cache clearing.
 

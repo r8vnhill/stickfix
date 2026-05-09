@@ -7,6 +7,10 @@ import pytest
 from hamcrest import assert_that, empty, equal_to, has_length, instance_of, is_
 from telegram import InlineQueryResultArticle, InlineQueryResultCachedSticker, ParseMode
 
+from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
+from bot.application.results import AcknowledgementResult, InlineQueryResult
+from bot.application.use_cases.clear_inline_cache import ClearInlineCache
+from bot.application.use_cases.resolve_inline_query import ResolveInlineQuery
 from bot.domain.user import SF_PUBLIC, StickfixUser
 from bot.handlers.inline import InlineHandler
 
@@ -34,6 +38,13 @@ class FakeUserStore:
         self.users[key] = value
         self.writes.append((key, value))
 
+    def __delitem__(self, key: object) -> None:
+        del self.users[key]
+
+    def get(self, key: object) -> StickfixUser | None:
+        """Get a user or return None if not found."""
+        return self.users.get(key)
+
 
 class FakeBot:
     def __init__(self) -> None:
@@ -41,6 +52,34 @@ class FakeBot:
 
     def answer_inline_query(self, *args: object, **kwargs: object) -> None:
         self.answer_inline_query_calls.append({"args": args, "kwargs": kwargs})
+
+
+class FakeResolveInlineQuery:
+    """Fake use case that returns application layer results."""
+
+    def __init__(self) -> None:
+        self.calls: list[InlineQueryRequest] = []
+
+    def __call__(self, request: InlineQueryRequest) -> InlineQueryResult:
+        self.calls.append(request)
+        return InlineQueryResult(
+            sticker_ids=(),
+            default_tags=(),
+            show_default_help=False,
+            help_text=None,
+            next_offset=0,
+        )
+
+
+class FakeClearInlineCache:
+    """Fake use case for clearing cache."""
+
+    def __init__(self) -> None:
+        self.calls: list[ClearInlineCacheCommand] = []
+
+    def __call__(self, command: ClearInlineCacheCommand) -> AcknowledgementResult:
+        self.calls.append(command)
+        return AcknowledgementResult(acknowledged=True)
 
 
 @dataclass
@@ -72,8 +111,17 @@ class FakeUpdate:
     chosen_inline_result: FakeChosenInlineResult | None = None
 
 
-def make_handler(store: FakeUserStore) -> InlineHandler:
-    return InlineHandler(FakeDispatcher(), store)
+def make_handler(
+    store: FakeUserStore,
+    resolve_inline_query: ResolveInlineQuery | None = None,
+    clear_inline_cache: ClearInlineCache | None = None,
+) -> InlineHandler:
+    return InlineHandler(
+        FakeDispatcher(),
+        store,
+        resolve_inline_query=resolve_inline_query,
+        clear_inline_cache=clear_inline_cache,
+    )
 
 
 def make_public_pack(store: FakeUserStore) -> StickfixUser:
@@ -84,9 +132,9 @@ def make_public_pack(store: FakeUserStore) -> StickfixUser:
 
 
 def make_user(store: FakeUserStore, user_id: int, *, private_mode: bool = False) -> StickfixUser:
-    user = StickfixUser(user_id)
+    user = StickfixUser(str(user_id))
     user.private_mode = private_mode
-    store[user_id] = user
+    store[str(user_id)] = user
     store.writes.clear()
     return user
 
@@ -164,7 +212,9 @@ def test_non_empty_inline_query_returns_cached_sticker_results_without_help_arti
 
     results = returned_results(bot)
     assert_that(results, has_length(2))
-    assert_that(all(isinstance(result, InlineQueryResultCachedSticker) for result in results), is_(True))
+    assert_that(
+        all(isinstance(result, InlineQueryResultCachedSticker) for result in results), is_(True)
+    )
     assert_that(set(result.sticker_file_id for result in results), equal_to(set(expected_stickers)))
     assert_answer_arguments(bot)
 
@@ -225,13 +275,15 @@ def test_inline_query_resolves_current_public_private_fallback_behaviour(
     call_inline_get(make_handler(store), bot, user_id=123, query="wave")
 
     results = returned_results(bot)
-    assert_that(set(result.sticker_file_id for result in results), equal_to(set(expected_sticker_id)))
+    assert_that(
+        set(result.sticker_file_id for result in results), equal_to(set(expected_sticker_id))
+    )
 
 
 def test_chosen_result_clears_existing_user_cache_and_writes_user_back() -> None:
     store = FakeUserStore()
     make_public_pack(store)
-    user = make_user(store, 123)
+    user = make_user(store, 123, private_mode=True)
     user.cache["wave"] = ["cached-sticker"]
     bot = FakeBot()
     update = FakeUpdate(
@@ -242,10 +294,12 @@ def test_chosen_result_clears_existing_user_cache_and_writes_user_back() -> None
     make_handler(store)._InlineHandler__on_result(update, FakeContext(bot=bot))
 
     assert_that(user.cache, equal_to({}))
-    assert_that(store.writes, equal_to([(123, user)]))
+    assert_that(store.writes, equal_to([("123", user)]))
 
 
-def test_chosen_result_for_missing_user_clears_public_pack_cache_and_writes_public_pack_back() -> None:
+def test_chosen_result_for_missing_user_clears_public_pack_cache_and_writes_public_pack_back() -> (
+    None
+):
     store = FakeUserStore()
     public_pack = make_public_pack(store)
     public_pack.cache["wave"] = ["cached-sticker"]
@@ -271,3 +325,130 @@ def test_invalid_inline_query_offset_raises_value_error_and_does_not_answer_or_w
 
     assert_that(bot.answer_inline_query_calls, empty())
     assert_that(store.writes, empty())
+
+
+# Tests for request/command mapping with fake use cases
+
+
+def test_inline_query_builds_request_with_user_id_when_effective_user_exists() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeResolveInlineQuery()
+    bot = FakeBot()
+
+    call_inline_get(
+        make_handler(store, resolve_inline_query=fake_use_case), bot, user_id=456, query="search"
+    )
+
+    assert_that(fake_use_case.calls, has_length(1))
+    assert_that(fake_use_case.calls[0].user_id, equal_to("456"))
+
+
+def test_inline_query_builds_request_with_none_user_id_when_effective_user_is_none() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeResolveInlineQuery()
+    bot = FakeBot()
+    update = FakeUpdate(
+        effective_user=None,
+        inline_query=FakeInlineQuery(id="inline-1", query="search", offset="0"),
+    )
+
+    handler = make_handler(store, resolve_inline_query=fake_use_case)
+    handler._InlineHandler__inline_get(update, FakeContext(bot=bot))
+
+    assert_that(fake_use_case.calls, has_length(1))
+    assert_that(fake_use_case.calls[0].user_id, equal_to(None))
+
+
+def test_inline_query_builds_request_with_query_text_and_offset() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeResolveInlineQuery()
+    bot = FakeBot()
+
+    call_inline_get(
+        make_handler(store, resolve_inline_query=fake_use_case), bot, query="wave moon", offset="10"
+    )
+
+    request = fake_use_case.calls[0]
+    assert_that(request.query_text, equal_to("wave moon"))
+    assert_that(request.offset, equal_to(10))
+    assert_that(request.limit, equal_to(49))
+
+
+def test_inline_query_builds_help_article_from_application_result() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+
+    class CustomResolveInlineQuery:
+        def __call__(self, request: InlineQueryRequest) -> InlineQueryResult:
+            return InlineQueryResult(
+                sticker_ids=(),
+                default_tags=("wave", "hello"),
+                show_default_help=True,
+                help_text="This is help content",
+                next_offset=0,
+            )
+
+    bot = FakeBot()
+    call_inline_get(make_handler(store, resolve_inline_query=CustomResolveInlineQuery()), bot)
+
+    results = returned_results(bot)
+    assert_that(results[0], instance_of(InlineQueryResultArticle))
+    assert_that(results[0].title, equal_to("Click me for help"))
+    assert_that(results[0].description, equal_to("Try calling me inline like `@stickfixbot wave`"))
+    assert_that(results[0].input_message_content.message_text, equal_to("This is help content"))
+
+
+def test_chosen_result_builds_command_with_user_id_when_effective_user_exists() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeClearInlineCache()
+    bot = FakeBot()
+    update = FakeUpdate(
+        effective_user=FakeTelegramUser(789),
+        chosen_inline_result=FakeChosenInlineResult(query="test"),
+    )
+
+    make_handler(store, clear_inline_cache=fake_use_case)._InlineHandler__on_result(
+        update, FakeContext(bot=bot)
+    )
+
+    assert_that(fake_use_case.calls, has_length(1))
+    assert_that(fake_use_case.calls[0].user_id, equal_to("789"))
+
+
+def test_chosen_result_builds_command_with_none_user_id_when_effective_user_is_none() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeClearInlineCache()
+    bot = FakeBot()
+    update = FakeUpdate(
+        effective_user=None,
+        chosen_inline_result=FakeChosenInlineResult(query="test"),
+    )
+
+    make_handler(store, clear_inline_cache=fake_use_case)._InlineHandler__on_result(
+        update, FakeContext(bot=bot)
+    )
+
+    assert_that(fake_use_case.calls, has_length(1))
+    assert_that(fake_use_case.calls[0].user_id, equal_to(None))
+
+
+def test_chosen_result_builds_command_with_query_text() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    fake_use_case = FakeClearInlineCache()
+    bot = FakeBot()
+    update = FakeUpdate(
+        effective_user=FakeTelegramUser(123),
+        chosen_inline_result=FakeChosenInlineResult(query="wave moon"),
+    )
+
+    make_handler(store, clear_inline_cache=fake_use_case)._InlineHandler__on_result(
+        update, FakeContext(bot=bot)
+    )
+
+    assert_that(fake_use_case.calls[0].query_text, equal_to("wave moon"))

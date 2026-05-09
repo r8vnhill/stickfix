@@ -1,4 +1,4 @@
-# [PLAN] Step 4: Extract Inline Query Resolution And Cache Clearing
+# [DONE] Step 4: Extract Inline Query Resolution And Cache Clearing
 
 ## Summary
 
@@ -357,7 +357,7 @@ Implemented. See [cycle_4_add_clearinlinecache.md](cycle_4_add_clearinlinecache.
 - Added application use-case tests for private/public/missing user behavior, missing public-pack fallback, ignored `query_text`, exact save target, and unrelated cache preservation.
 - Verified the application seam and Ruff checks for the touched application code.
 
-### Cycle 5: Rewire `InlineHandler`
+### ~~Cycle 5: Rewire `InlineHandler`~~
 
 Inject use cases through `InlineHandler.__init__`.
 
