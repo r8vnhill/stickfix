@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from typing import Callable
 
 import pytest
-from hamcrest import assert_that, empty, equal_to, has_length, instance_of, is_
+from hamcrest import (
+    assert_that,
+    empty,
+    equal_to,
+    has_length,
+    instance_of,  # type: ignore[reportUnknownVariableType]
+    is_,  # type: ignore[reportUnknownVariableType]
+)
 from telegram import InlineQueryResultArticle, InlineQueryResultCachedSticker, ParseMode
+from telegram.ext import ChosenInlineResultHandler, InlineQueryHandler
 
 from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
 from bot.application.results import AcknowledgementResult, InlineQueryResult
@@ -124,6 +133,26 @@ def make_handler(
     )
 
 
+def inline_query_handler(dispatcher: FakeDispatcher) -> InlineQueryHandler:
+    return next(
+        handler for handler in dispatcher.handlers if isinstance(handler, InlineQueryHandler)
+    )
+
+
+def chosen_result_handler(dispatcher: FakeDispatcher) -> ChosenInlineResultHandler:
+    return next(
+        handler for handler in dispatcher.handlers if isinstance(handler, ChosenInlineResultHandler)
+    )
+
+
+def inline_query_callback(dispatcher: FakeDispatcher) -> Callable[..., object]:
+    return inline_query_handler(dispatcher).callback
+
+
+def chosen_result_callback(dispatcher: FakeDispatcher) -> Callable[..., object]:
+    return chosen_result_handler(dispatcher).callback
+
+
 def make_public_pack(store: FakeUserStore) -> StickfixUser:
     public_pack = StickfixUser(SF_PUBLIC)
     store[SF_PUBLIC] = public_pack
@@ -144,6 +173,20 @@ def add_numbered_stickers(user: StickfixUser, tag: str, count: int) -> tuple[str
     for sticker_id in sticker_ids:
         user.add_sticker(sticker_id, [tag])
     return sticker_ids
+
+
+def test_inline_handler_registers_inline_query_and_chosen_result_handlers() -> None:
+    store = FakeUserStore()
+    make_public_pack(store)
+    dispatcher = FakeDispatcher()
+
+    InlineHandler(dispatcher, store)
+
+    assert_that(dispatcher.handlers, has_length(2))
+    assert_that(inline_query_handler(dispatcher), instance_of(InlineQueryHandler))
+    assert_that(chosen_result_handler(dispatcher), instance_of(ChosenInlineResultHandler))
+    assert_that(callable(inline_query_callback(dispatcher)), is_(True))
+    assert_that(callable(chosen_result_callback(dispatcher)), is_(True))
 
 
 def call_inline_get(
