@@ -41,7 +41,7 @@ Out of scope:
 * changing pagination semantics;
 * changing the result limit from `49`.
 
-## Cycle 1.1 — Register Inline Query and Chosen Result Handlers
+## Cycle 1.1 — Register Inline Query and Chosen Result Handlers [DONE]
 
 ### Red
 

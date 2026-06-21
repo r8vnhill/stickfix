@@ -1,4 +1,7 @@
-from typing import Any, Final
+"""Stickfix bot bootstrap: builds the Telegram updater, wires handlers, and runs
+the bot through long polling (never PTB's Tornado webhook server)."""
+
+from typing import Any, Final, cast
 
 from telegram.ext import CallbackContext, Dispatcher, JobQueue, Updater
 
@@ -12,6 +15,21 @@ USERS_DB: Final[str] = "users"
 
 DataDict = dict[str, Any]
 CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]
+
+
+def start_polling_service(
+    updater: "Updater[CallbackCtx, DataDict, DataDict, DataDict]",
+    logger: StickfixLogger,
+) -> None:
+    """Starts the bot's update transport in polling mode.
+
+    Stickfix intentionally runs through Telegram long polling and never starts
+    PTB's Tornado-based webhook server. This keeps the bot off any HTTP listening
+    port, so the vulnerable ``multipart/form-data`` parser in Tornado (see
+    CVE-2026-31958) is never reachable through Stickfix.
+    """
+    logger.info("Starting bot polling service.")
+    updater.start_polling()  # pyright: ignore[reportUnknownMemberType]
 
 
 class Stickfix:
@@ -31,30 +49,32 @@ class Stickfix:
         :param token:
             the bot's telegram token
         """
-        job_queue: JobQueue
         self.__logger = StickfixLogger(__name__)
         self.__start_updater(token)
-        self.__dispatcher = self.__updater.dispatcher
+        self.__dispatcher = cast(
+            "Dispatcher[CallbackCtx, DataDict, DataDict, DataDict]",
+            self.__updater.dispatcher,  # pyright: ignore[reportUnknownMemberType]
+        )
         self.__user_db = StickfixDB(USERS_DB)
         self.__setup_handlers()
-        job_queue = self.__updater.job_queue
-        job_queue.run_repeating(self.__save_db, interval=5 * 60, first=0)
+        job_queue = cast(JobQueue, self.__updater.job_queue)  # pyright: ignore[reportUnknownMemberType]
+        job_queue.run_repeating(  # pyright: ignore[reportUnknownMemberType]
+            self.__save_db, interval=5 * 60, first=0
+        )
 
     def run(self) -> None:
         """Runs the bot."""
-        self.__logger.info("Starting bot polling service.")
-        self.__updater.start_polling()
+        start_polling_service(self.__updater, self.__logger)
 
     def __start_updater(self, token: str) -> None:
         """Starts the bot's updater with the given token."""
-        self.__logger.info(f"Starting bot updater")
+        self.__logger.info("Starting bot updater")
         self.__updater = Updater(token, use_context=True)
 
-    # noinspection PyUnusedLocal
-    def __save_db(self, context: CallbackCtx):
+    def __save_db(self, _context: CallbackCtx) -> None:
         self.__user_db.save()
 
-    def __setup_handlers(self):
+    def __setup_handlers(self) -> None:
         HelperHandler(self.__dispatcher, self.__user_db)
         UserHandler(self.__dispatcher, self.__user_db)
         StickerHandler(self.__dispatcher, self.__user_db)
