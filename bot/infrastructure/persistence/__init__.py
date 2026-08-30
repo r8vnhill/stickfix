@@ -1,14 +1,10 @@
-"""Persistence adapters implementing application repository ports.
+"""Runtime persistence adapters implementing application repository ports.
 
-This package provides concrete implementations of application ports (e.g.,
-UserRepository) that wrap the legacy YAML-backed storage backends. Adapters
-translate between domain types and storage format, allowing use cases to work
-with domain objects rather than raw YAML/storage details.
-
-Handlers instantiate and inject adapters into use cases. Tests can substitute
-in-memory implementations for testing without filesystem/YAML dependencies.
+PostgreSQL is the runtime implementation. The historical YAML adapter remains
+in its own module for legacy tests and migration support, but is not imported
+by the normal persistence package.
 """
 
-from .stickfix_user_repository import StickfixUserRepository
+from .postgres import PostgresUserRepository
 
-__all__ = ["StickfixUserRepository"]
+__all__ = ["PostgresUserRepository"]

@@ -384,7 +384,7 @@ def test_inline_query_builds_request_with_user_id_when_effective_user_exists() -
     )
 
     assert_that(fake_use_case.calls, has_length(1))
-    assert_that(fake_use_case.calls[0].user_id, equal_to("456"))
+    assert_that(fake_use_case.calls[0].user_id, equal_to(456))
 
 
 def test_inline_query_builds_request_with_none_user_id_when_effective_user_is_none() -> None:
@@ -459,7 +459,7 @@ def test_chosen_result_builds_command_with_user_id_when_effective_user_exists() 
     )
 
     assert_that(fake_use_case.calls, has_length(1))
-    assert_that(fake_use_case.calls[0].user_id, equal_to("789"))
+    assert_that(fake_use_case.calls[0].user_id, equal_to(789))
 
 
 def test_chosen_result_builds_command_with_none_user_id_when_effective_user_is_none() -> None:

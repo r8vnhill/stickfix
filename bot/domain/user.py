@@ -23,6 +23,16 @@ SF_PUBLIC = "SF-PUBLIC"
 
 
 class StickfixUser:
+    """A sticker owner: either a regular Telegram user or the shared public pack.
+
+    Holds the mutable sticker state -- ``stickers`` and ``cached_stickers`` are
+    ``{tag: [sticker_id, ...]}`` dicts -- plus the ``private_mode`` and ``shuffle``
+    preferences. Instances are mutated in place by the domain service and then handed
+    to a repository to persist. ``id`` is a numeric ``UserId`` for real users and the
+    ``SF_PUBLIC`` sentinel string for the public pack; the runtime repository ports
+    only accept the numeric form (see ``PublicPackRepository`` for the pack).
+    """
+
     OFF = False
     ON = True
     _shuffle: bool
@@ -127,7 +137,7 @@ class StickfixUser:
         tag_list = list(self.stickers.keys())
         if len(tag_list) == 0:
             return []
-        return [random.choice(tag_list)]
+        return [random.choice(tag_list)]  # noqa: S311
 
     def remove_cached_stickers(self, user_id=None):
         """

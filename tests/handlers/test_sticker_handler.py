@@ -106,16 +106,21 @@ def test_add_handler_builds_command_and_replies_ok() -> None:
 
     handler._StickerHandler__add_sticker(make_update(message), SimpleNamespace(args=["wave"]))
 
-    assert_that(add_use_case.commands, equal_to([
-        AddStickerCommand(
-            user_id=123,
-            chat_id=456,
-            chat_type="private",
-            reply_sticker_id="sticker-1",
-            reply_sticker_emoji="smile",
-            tags=("wave",),
-        )
-    ]))
+    assert_that(
+        add_use_case.commands,
+        equal_to(
+            [
+                AddStickerCommand(
+                    user_id=123,
+                    chat_id=456,
+                    chat_type="private",
+                    reply_sticker_id="sticker-1",
+                    reply_sticker_emoji="smile",
+                    tags=("wave",),
+                )
+            ]
+        ),
+    )
     assert_that(message.text_replies, equal_to(["Ok!"]))
 
 
@@ -130,9 +135,10 @@ def test_get_handler_builds_query_and_sends_returned_stickers() -> None:
         SimpleNamespace(args=["wave"]),
     )
 
-    assert_that(get_use_case.queries, equal_to([
-        GetStickersQuery(user_id=123, chat_id=456, chat_type="private", tags=("wave",))
-    ]))
+    assert_that(
+        get_use_case.queries,
+        equal_to([GetStickersQuery(user_id=123, chat_id=456, chat_type="private", tags=("wave",))]),
+    )
     assert_that(chat.sent_stickers, equal_to(["sticker-a", "sticker-b"]))
 
 
@@ -159,14 +165,19 @@ def test_delete_handler_builds_command_and_stays_silent_on_success() -> None:
 
     handler._StickerHandler__delete_from(make_update(message), SimpleNamespace(args=["wave"]))
 
-    assert_that(delete_use_case.commands, equal_to([
-        DeleteStickerCommand(
-            user_id=123,
-            chat_id=456,
-            chat_type="private",
-            reply_sticker_id="sticker-1",
-            tags=("wave",),
-        )
-    ]))
+    assert_that(
+        delete_use_case.commands,
+        equal_to(
+            [
+                DeleteStickerCommand(
+                    user_id=123,
+                    chat_id=456,
+                    chat_type="private",
+                    reply_sticker_id="sticker-1",
+                    tags=("wave",),
+                )
+            ]
+        ),
+    )
     assert_that(message.text_replies, equal_to([]))
     assert_that(message.markdown_replies, equal_to([]))

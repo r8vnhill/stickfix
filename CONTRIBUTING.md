@@ -1,6 +1,7 @@
 # Contributing
 
-follow the rediscovery plan and use the modern tooling so every contributor shares the same experience.
+Use the modern `uv` + `ruff` tooling so every contributor shares the same
+environment. The sections below cover local setup, checks, optional extras, and CI.
 
 ## Local setup
 
@@ -10,19 +11,30 @@ follow the rediscovery plan and use the modern tooling so every contributor shar
 
 ## Lint & tests
 
-- `uv run ruff check` (and optionally `uv run ruff format`) replace the flaky/flake8/isort mix.
-- `uv run pytest` runs the handler/database tests inside the locked env.
-- Use targeted tests (`uv run pytest tests/test_handlers`) when touching command flows so handler-level coverage stays clean.
-- Add new tests near the affected modules and keep firm coverage on the handler/command flows summarized in the rediscovery report.
+- `uv run ruff check` (and optionally `uv run ruff format`) replace the old
+  flake8/isort mix. `ruff.toml` sets `line-length = 100`.
+- `uv run pytest` runs the unit/handler suite inside the locked env; `-m integration`
+  additionally needs a PostgreSQL database (see below).
+- Use targeted tests (e.g. `uv run pytest tests/handlers`) when touching command
+  flows so handler-level coverage stays fast.
+- Add new tests next to the affected modules; keep the handler/command flows and the
+  application/domain seams covered.
 
 ## Optional extras
 
-### Database support
+### PostgreSQL and migrations
 
-To work with PostgreSQL (`psycopg`, `pgvector`, `sqlmodel`):
+SQLAlchemy, psycopg, and Alembic are regular runtime dependencies. Start a disposable
+PostgreSQL instance and apply the schema with:
+
 ```bash
-uv sync --extra db
+docker compose up -d db
+$env:STICKFIX_DATABASE_URL = "postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix"
+uv run alembic upgrade head
+uv run alembic check
 ```
+
+`pgvector` remains an optional extra and is not required by Stickfix persistence.
 
 ### Graph database support
 
@@ -59,10 +71,22 @@ uv run ruff check
 uv run pytest
 ```
 
-If you add migration scripts or database tooling, include a job that runs the new scripts (see issue #12) so they stay runnable before deployment.
+Database changes must include migration and repository-contract coverage. Run the PostgreSQL
+contract tests with an explicitly disposable database:
+
+```bash
+$env:STICKFIX_TEST_DATABASE_URL = $env:STICKFIX_DATABASE_URL
+uv run pytest -m integration
+```
 
 Describe any new CI steps in `.github/workflows/`.
 
 ## Legacy tooling
 
-The `requirements.txt` and `venv` setup workflows are deprecated. All contributions should use the `pyproject.toml` + `uv` + `ruff` workflow to ensure consistency across the team. If you need to interact with legacy tooling for migration purposes, reach out in the project's discussion board.
+The restricted YAML reader under `bot.infrastructure.migration` is for migration and recovery
+workflows only; it is not a runtime storage backend.
+
+The `requirements.txt` and `venv` setup workflows are deprecated. All contributions
+should use the `pyproject.toml` + `uv` + `ruff` workflow to keep the environment
+consistent across the team. If you need legacy tooling for a migration, raise it on
+the project's discussion board first.

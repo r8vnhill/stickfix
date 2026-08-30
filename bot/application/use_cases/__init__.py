@@ -13,15 +13,21 @@ imports centralized here makes call sites stable while the internal package evol
 from .add_sticker import AddSticker
 from .clear_inline_cache import ClearInlineCache
 from .delete_sticker import DeleteSticker
+from .delete_user import DeleteUser
+from .ensure_user import EnsureUser
 from .get_stickers import GetStickers
 from .resolve_inline_query import ResolveInlineQuery
 from .set_mode import SetMode
+from .set_shuffle import SetShuffle
 
 __all__ = [
     "AddSticker",
     "ClearInlineCache",
+    "DeleteUser",
     "DeleteSticker",
+    "EnsureUser",
     "GetStickers",
     "ResolveInlineQuery",
     "SetMode",
+    "SetShuffle",
 ]

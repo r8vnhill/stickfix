@@ -20,11 +20,12 @@ implementation concerns.
 Concrete implementations belong in `bot.infrastructure`, where they may delegate  to YAML files,
 local files, databases, HTTP clients, or other external systems.
 
-Keeping these contracts here gives Stickfix a stable application boundary: use cases remain easy to 
+Keeping these contracts here gives Stickfix a stable application boundary: use cases remain easy to
 test with fakes, while production wiring can choose the appropriate adapter.
 """
 
 from .help_content import HelpContentProvider
+from .public_pack_repository import PublicPackRepository
 from .user_repository import UserRepository
 
-__all__ = ["HelpContentProvider", "UserRepository"]
+__all__ = ["HelpContentProvider", "PublicPackRepository", "UserRepository"]

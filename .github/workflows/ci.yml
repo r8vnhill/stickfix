@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+      - run: uv sync --extra dev --frozen
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run pytest
+
+  postgres-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-bookworm
+        env:
+          POSTGRES_DB: stickfix
+          POSTGRES_USER: stickfix
+          POSTGRES_PASSWORD: stickfix-test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stickfix -d stickfix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.8"
+      - run: uv sync --extra dev --frozen
+      - run: uv run alembic upgrade head
+        env:
+          STICKFIX_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+      - run: uv run alembic check
+        env:
+          STICKFIX_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+      - run: uv run pytest -m integration
+        env:
+          STICKFIX_TEST_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix

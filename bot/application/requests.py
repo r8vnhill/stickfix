@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from bot.domain.identifiers import UserId
 from bot.domain.user import Switch, UserModes
 
 
 @dataclass(frozen=True, slots=True)
 class AddStickerCommand:
-    user_id: str
+    user_id: UserId
     chat_id: str
     chat_type: str
     reply_sticker_id: str | None
@@ -19,7 +20,7 @@ class AddStickerCommand:
 
 @dataclass(frozen=True, slots=True)
 class GetStickersQuery:
-    user_id: str
+    user_id: UserId
     chat_id: str
     chat_type: str
     tags: tuple[str, ...] = field(default_factory=tuple)
@@ -27,7 +28,7 @@ class GetStickersQuery:
 
 @dataclass(frozen=True, slots=True)
 class DeleteStickerCommand:
-    user_id: str
+    user_id: UserId
     chat_id: str
     chat_type: str
     reply_sticker_id: str | None
@@ -36,24 +37,29 @@ class DeleteStickerCommand:
 
 @dataclass(frozen=True, slots=True)
 class SetModeCommand:
-    user_id: str
+    user_id: UserId
     mode: UserModes | str
 
 
 @dataclass(frozen=True, slots=True)
 class SetShuffleCommand:
-    user_id: str
+    user_id: UserId
     shuffle: Switch | str
 
 
 @dataclass(frozen=True, slots=True)
 class DeleteUserCommand:
-    user_id: str
+    user_id: UserId
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureUserCommand:
+    user_id: UserId
 
 
 @dataclass(frozen=True, slots=True)
 class InlineQueryRequest:
-    user_id: str | None
+    user_id: UserId | None
     query_text: str
     offset: int = 0
     limit: int = 49
@@ -61,5 +67,5 @@ class InlineQueryRequest:
 
 @dataclass(frozen=True, slots=True)
 class ClearInlineCacheCommand:
-    user_id: str | None
+    user_id: UserId | None
     query_text: str = ""

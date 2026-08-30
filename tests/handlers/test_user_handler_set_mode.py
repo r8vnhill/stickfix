@@ -79,10 +79,15 @@ def test_set_mode_handler_maps_invalid_input_to_existing_markdown_reply() -> Non
     call_set_mode(handler, make_update(message), ["invalid"])
 
     assert_that(message.text_replies, empty())
-    assert_that(message.markdown_replies, equal_to([
-        "Sorry, I didn't understand. This command syntax is `/setMode private` "
-        "or `setMode public`."
-    ]))
+    assert_that(
+        message.markdown_replies,
+        equal_to(
+            [
+                "Sorry, I didn't understand. This command syntax is `/setMode private` "
+                "or `setMode public`."
+            ]
+        ),
+    )
 
 
 def test_set_mode_handler_keeps_missing_argument_noop() -> None:

@@ -1,10 +1,11 @@
 """ "Stickfix" (c) by Ignacio Slater M.
-    "Stickfix" is licensed under a
-    Creative Commons Attribution 4.0 International License.
+"Stickfix" is licensed under a
+Creative Commons Attribution 4.0 International License.
 
-    You should have received a copy of the license along with this
-    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+You should have received a copy of the license along with this
+work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+
 import json
 from enum import Enum
 from typing import Callable, Tuple, Union
@@ -18,31 +19,35 @@ module_logger = StickfixLogger(__name__)
 
 
 def get_message_content(update: Update):
-    """ Gets the content of a telegram message  """
+    """Gets the content of a telegram message"""
     message_content: Message = update.effective_message
     module_logger.debug(
-        f"Received message: \n {json.dumps(message_content.to_dict(), indent=2, sort_keys=True)}")
+        f"Received message: \n {json.dumps(message_content.to_dict(), indent=2, sort_keys=True)}"
+    )
     return message_content
 
 
 def check_reply(reply: Union[Message, None], message: Message, type="add"):
-    """ Checks if a received message replies to another.    """
+    """Checks if a received message replies to another."""
     if not reply:
         message.reply_markdown(
             f"To {type} a sticker {'to' if type == 'add' else 'from'} the database, you need to "
-            f"*reply to a message* containing the sticker you want to add.")
+            f"*reply to a message* containing the sticker you want to add."
+        )
         user: User = message.from_user
-        raise_no_sticker_error(msg=add_error_msg(user.username),
-                               cause="The user didn't reply to a sticker.")
+        raise_no_sticker_error(
+            msg=add_error_msg(user.username), cause="The user didn't reply to a sticker."
+        )
 
 
 def check_sticker(sticker: Union[Sticker, None], message: Message):
-    """ Checks if a message contains a sticker.    """
+    """Checks if a message contains a sticker."""
     if not sticker:
         message.reply_markdown("I can only add stickers to de database.")
         user: User = message.from_user
-        raise_no_sticker_error(msg=add_error_msg(user.username),
-                               cause="The command didn't reply to a sticker")
+        raise_no_sticker_error(
+            msg=add_error_msg(user.username), cause="The command didn't reply to a sticker"
+        )
 
 
 def add_error_msg(user: str) -> str:
@@ -69,7 +74,7 @@ def raise_error(constructor: Callable, msg: str, cause: str) -> None:
 
 
 def get_message_meta(update: Update) -> Tuple[Message, User, Chat]:
-    """ Gets the metadata of a message. """
+    """Gets the metadata of a message."""
     return update.effective_message, update.effective_user, update.effective_chat
 
 

@@ -22,6 +22,7 @@ def clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "STICKFIX_TOKEN_PROD",
         "STICKFIX_TOKEN_FILE",
         "STICKFIX_LOG_PATH",
+        "STICKFIX_DATABASE_URL",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -70,6 +71,15 @@ def test_log_path_can_be_overridden(monkeypatch):
     monkeypatch.setenv("STICKFIX_LOG_PATH", "custom/logs/bot.log")
     cfg = load_config()
     assert cfg.log_path == Path("custom/logs/bot.log")
+
+
+def test_database_url_can_be_loaded_from_environment(monkeypatch):
+    monkeypatch.setenv("STICKFIX_TOKEN", "generic-token")
+    monkeypatch.setenv("STICKFIX_DATABASE_URL", "postgresql+psycopg://user:pass@localhost/stickfix")
+
+    cfg = load_config()
+
+    assert cfg.database_url == "postgresql+psycopg://user:pass@localhost/stickfix"
 
 
 def test_error_is_raised_when_no_token_available():

@@ -6,6 +6,20 @@ requires-python = ">=3.14, <4"
 overrides = [{ name = "tornado", specifier = ">=6.5.5,<7" }]
 
 [[package]]
+name = "alembic"
+version = "1.19.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mako" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/2b/e4153978368de59918115c9e01d3ebf58a558a7285efa7e960c383c4b59a/alembic-1.19.1.tar.gz", hash = "sha256:e0fca0518118c78acc493e31bcb5402f190057aaf6df8b5b95ce94c4789cf648", size = 2070816, upload-time = "2026-08-08T16:32:01.565Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/89/e62cc37b69ad357cc8ecd6e7367f5245f523d3cbb338a66197212bdf6749/alembic-1.19.1-py3-none-any.whl", hash = "sha256:b39018cb3d9413a19cbd54cf3c02ad33998641f0538eb77413a488a21c3e14be", size = 265946, upload-time = "2026-08-08T16:32:03.153Z" },
+]
+
+[[package]]
 name = "apscheduler"
 version = "3.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -396,18 +410,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pydantic"
-version = "1.10.24"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/8d/7b346ed940c3e0f9eee7db9be37915a6dac0d9535d736e2ca47a81a066f3/pydantic-1.10.24.tar.gz", hash = "sha256:7e6d1af1bd3d2312079f28c9baf2aafb4a452a06b50717526e5ac562e37baa53", size = 357314, upload-time = "2025-09-25T01:36:33.065Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/7f/a168d7077f85f85128aa5636abf13c804c06235c786f1881e659703899a4/pydantic-1.10.24-py3-none-any.whl", hash = "sha256:093768eba26db55a88b12f3073017e3fdee319ef60d3aef5c6c04a4e484db193", size = 166727, upload-time = "2025-09-25T01:36:31.732Z" },
-]
-
-[[package]]
 name = "pyhamcrest"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -576,37 +578,23 @@ wheels = [
 
 [[package]]
 name = "sqlalchemy"
-version = "1.4.41"
+version = "2.0.52"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "greenlet", marker = "platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/67/a0/97da2cb07e013fd6c37fd896a86b374aa726e4161cafd57185e8418d59aa/SQLAlchemy-1.4.41.tar.gz", hash = "sha256:0292f70d1797e3c54e862e6f30ae474014648bc9c723e14a2fda730adb0a9791", size = 8281227, upload-time = "2022-09-07T00:58:08.253Z" }
-
-[[package]]
-name = "sqlalchemy2-stubs"
-version = "0.0.2a38"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/94/df/be9e0062f649fd2e9b9b73a98c250f520fa10beaebddb8948dffad23c3b6/sqlalchemy2-stubs-0.0.2a38.tar.gz", hash = "sha256:861d722abeb12f13eacd775a9f09379b11a5a9076f469ccd4099961b95800f9e", size = 123950, upload-time = "2023-12-30T12:15:29.27Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/21/77b4c147963073040dc3c3a5cb7a8c3001a1893c0209432cb77f9df836aa/sqlalchemy-2.0.52.tar.gz", hash = "sha256:5e2d46356ac2ccb7d268ab6c2319ac6a2b42f1b8d5fd8bd3d46855cd82abee97", size = 9945637, upload-time = "2026-08-11T19:07:09.829Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/ea/6eff437d0a26c894da2982429ed2c148ecaf0526349ddc8cda1e7151c171/sqlalchemy2_stubs-0.0.2a38-py3-none-any.whl", hash = "sha256:b62aa46943807287550e2033dafe07564b33b6a815fbaa3c144e396f9cc53bcb", size = 191786, upload-time = "2023-12-30T12:15:27.882Z" },
-]
-
-[[package]]
-name = "sqlmodel"
-version = "0.0.8"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic" },
-    { name = "sqlalchemy" },
-    { name = "sqlalchemy2-stubs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/64/ba/ad07004536e94e71f99aaae5e667bb6f7230f7e0fbc0b0266e88960dda5f/sqlmodel-0.0.8.tar.gz", hash = "sha256:3371b4d1ad59d2ffd0c530582c2140b6c06b090b32af9b9c6412986d7b117036", size = 22123, upload-time = "2022-08-30T17:56:30.882Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/63/65f95cf5902ccdfccec99de87666b5e039589c19db7ab62b3770171e5685/sqlmodel-0.0.8-py3-none-any.whl", hash = "sha256:0fd805719e0c5d4f22be32eb3ffc856eca3f7f20e8c7aa3e117ad91684b518ee", size = 21665, upload-time = "2022-08-30T17:56:29.622Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/f5/71cb30af58c9b80a4e1fac0b73bb48f86d497a774a6a2eb6d2f1e657bb73/sqlalchemy-2.0.52-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:410d52be41d17f1a236d19520fbe776257dc16516ed06bd16d433311842aefd9", size = 2169537, upload-time = "2026-08-11T20:58:13.855Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/93/d07ebd645d1b07b6b5ed63450a70f063a346a7e0f2c8810daf2e532400cb/sqlalchemy-2.0.52-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:dfe9ce533dbe4d0a2ae1486546619bd30b76bcd670539a44d910361376175f5e", size = 3319606, upload-time = "2026-08-11T21:02:45.829Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/5c/290c84c7c2566ecd3b65baaae0fddec9bc33b033b398a06123bb86fbfc6e/sqlalchemy-2.0.52-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:812bae5138bfc0aa46fb0686da0fc7f581f68e2bbb05bc24c3713bebaedd1437", size = 3323642, upload-time = "2026-08-11T21:17:05.675Z" },
+    { url = "https://files.pythonhosted.org/packages/13/f5/2cc160590ca49173359557880b92a0572293ccb899e8f6cedf150c5a3ddf/sqlalchemy-2.0.52-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:50bff43b632a56fbf5ed9afdd76307e1512b62051bcd5afb341ae67205bbb6c8", size = 3268125, upload-time = "2026-08-11T21:02:47.649Z" },
+    { url = "https://files.pythonhosted.org/packages/35/f3/ea8933fc9f7d1353e9c2ff9965eae687c4cef181120574591ed2fa0633e1/sqlalchemy-2.0.52-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:49565daf5af554f538e23aef1fc81a95a4e49658f152285e45c02f5fc44f04cd", size = 3289516, upload-time = "2026-08-11T21:17:07.267Z" },
+    { url = "https://files.pythonhosted.org/packages/45/67/05cf86541c1e1716fca1e4a996954a439cd74501707cda607fb7cb02ef50/sqlalchemy-2.0.52-cp314-cp314-win32.whl", hash = "sha256:ab9da41e61b9979b910499d633b241df20c51ee5037e5405b11c2faac3cbe1a2", size = 2130249, upload-time = "2026-08-11T21:14:57.273Z" },
+    { url = "https://files.pythonhosted.org/packages/96/d7/8ac6ffa1e36169e762ef65bd835046abb2251b1bc17f8f6708e14ed8d31f/sqlalchemy-2.0.52-cp314-cp314-win_amd64.whl", hash = "sha256:a593db51b3bae75db17a5738ad5f992244b3a03863f83c28117ee482c6a3f76d", size = 2156718, upload-time = "2026-08-11T21:14:58.667Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/4b/e01a737eef378e734cc6394a82248a6ce13b167dfa36c731075ce9fc9c64/sqlalchemy-2.0.52-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:c1e61d08bdf4ee2f41024569e3400de7d6734ba498144766b11260936ccfa582", size = 2190344, upload-time = "2026-08-11T19:53:21.393Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/3f/3582293d1e185e71d19d7c731c3e2ee20ba21981c4a1115c0806c1f62120/sqlalchemy-2.0.52-py3-none-any.whl", hash = "sha256:3b81b8363a919ce53453591cdb93702e6bd54ade6c4fa2f468fc053baee5ed89", size = 1950700, upload-time = "2026-08-11T20:47:21.603Z" },
 ]
 
 [[package]]
@@ -614,11 +602,14 @@ name = "stickfix-bot"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "alembic" },
     { name = "coloredlogs" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "python-telegram-bot" },
     { name = "pyyaml" },
     { name = "ruff" },
     { name = "six" },
+    { name = "sqlalchemy" },
     { name = "urllib3" },
     { name = "uv" },
 ]
@@ -626,8 +617,6 @@ dependencies = [
 [package.optional-dependencies]
 db = [
     { name = "pgvector" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "sqlmodel" },
 ]
 dev = [
     { name = "hypothesis" },
@@ -644,13 +633,14 @@ graph = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.19.1,<2" },
     { name = "coloredlogs", specifier = ">=15.0,<16" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0,<7.0" },
     { name = "neo4j", marker = "extra == 'graph'", specifier = ">=6.0,<7.0" },
     { name = "neo4j-driver", marker = "extra == 'graph'", specifier = ">=5.0,<6.0" },
     { name = "pgvector", marker = "extra == 'db'", specifier = ">=0.4.1,<0.5" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0,<4.0" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'db'", specifier = ">=3.1,<4" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pyhamcrest", marker = "extra == 'dev'", specifier = ">=2.1,<3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0,<8.0" },
     { name = "pytest-bdd", marker = "extra == 'dev'", specifier = ">=7.0,<8.0" },
@@ -659,7 +649,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "ruff", specifier = ">=0.4,<1.0" },
     { name = "six", specifier = ">=1.17,<1.18" },
-    { name = "sqlmodel", marker = "extra == 'db'", specifier = ">=0.0.8,<0.0.9" },
+    { name = "sqlalchemy", specifier = ">=2.0.52,<3" },
     { name = "urllib3", specifier = ">=1.26,<1.27" },
     { name = "uv", specifier = ">=0.9,<1.0" },
 ]

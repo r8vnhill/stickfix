@@ -1,20 +1,20 @@
 """ "Stickfix" (c) by Ignacio Slater M.
-    "Stickfix" is licensed under a
-    Creative Commons Attribution 4.0 International License.
+"Stickfix" is licensed under a
+Creative Commons Attribution 4.0 International License.
 
-    You should have received a copy of the license along with this
-    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+You should have received a copy of the license along with this
+work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+
 from telegram import Message, Sticker, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.application.errors import MissingStickerError, WrongInteractionContextError
+from bot.application.ports import UserRepository
 from bot.application.requests import AddStickerCommand, DeleteStickerCommand, GetStickersQuery
 from bot.application.use_cases import AddSticker, DeleteSticker, GetStickers
-from bot.database.storage import StickfixDB
-from bot.handlers.common import StickfixHandler
-from bot.infrastructure.persistence import StickfixUserRepository
+from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import (
@@ -27,69 +27,80 @@ from bot.utils.messages import (
 
 logger = StickfixLogger(__name__)
 
+#: Errors already reported to the user by ``bot.utils.messages`` helpers; the
+#: handler only needs to stop processing when one is raised.
+_HANDLED_INPUT_ERRORS = (NoStickerException, MissingStickerError)
+
 
 class StickerHandler(StickfixHandler):
-    def __init__(self, dispatcher: Dispatcher, user_db: StickfixDB):
-        super().__init__(dispatcher, user_db)
-        user_repository = StickfixUserRepository(user_db)
-        self.__add_sticker_use_case = AddSticker(user_repository)
-        self.__get_stickers_use_case = GetStickers(user_repository)
-        self.__delete_sticker_use_case = DeleteSticker(user_repository)
+    """Bridge the ``/add``, ``/get``, and ``/deleteFrom`` commands to their use cases.
+
+    Each callback parses the Telegram update, delegates to an ``AddSticker`` /
+    ``GetStickers`` / ``DeleteSticker`` use case, and turns the outcome into a reply.
+    Validation of the replied-to sticker lives in ``bot.utils.messages`` and raises
+    ``NoStickerException`` after already telling the user what went wrong.
+    """
+
+    def __init__(self, dispatcher: Dispatcher, users: UserRepository):
+        super().__init__(dispatcher, users)
+        self.__add_sticker_use_case = AddSticker(users)
+        self.__get_stickers_use_case = GetStickers(users)
+        self.__delete_sticker_use_case = DeleteSticker(users)
         self._dispatcher.add_handler(
-            CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True))
+            CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True)
+        )
         self._dispatcher.add_handler(
-            CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
+            CommandHandler(Commands.GET, self.__get_stickers, pass_args=True)
+        )
         self._dispatcher.add_handler(
-            CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True))
+            CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True)
+        )
+
+    @staticmethod
+    def __replied_sticker(message: Message, action: str = "add") -> Sticker:
+        """Return the sticker the command replied to, or raise ``NoStickerException``."""
+        reply_to = message.reply_to_message
+        check_reply(reply_to, message, action)
+        sticker = reply_to.sticker
+        check_sticker(sticker, message)
+        return sticker
 
     def __add_sticker(self, update: Update, context: CallbackContext) -> None:
-        """ Answers the /add command by adding a sticker to the DB. """
-        sticker: Sticker
-        reply_to: Message
+        """Answers the /add command by adding the replied-to sticker to the DB."""
         try:
-            msg, user, chat = get_message_meta(update)
-            reply_to: Message = msg.reply_to_message
-            check_reply(reply_to, msg)
-            sticker = reply_to.sticker
-            check_sticker(sticker, msg)
-            command = AddStickerCommand(
-                user_id=user.id,
-                chat_id=chat.id,
-                chat_type=chat.type,
-                reply_sticker_id=sticker.file_id,
-                reply_sticker_emoji=sticker.emoji,
-                tags=tuple(context.args),
+            msg, _, chat = get_message_meta(update)
+            sticker = self.__replied_sticker(msg)
+            self.__add_sticker_use_case(
+                AddStickerCommand(
+                    user_id=caller_id(update),
+                    chat_id=chat.id,
+                    chat_type=chat.type,
+                    reply_sticker_id=sticker.file_id,
+                    reply_sticker_emoji=sticker.emoji,
+                    tags=tuple(context.args),
+                )
             )
-            self.__add_sticker_use_case(command)
             msg.reply_text("Ok!")
-        except NoStickerException:
-            logger.debug("Handled error.")
-        except MissingStickerError:
+        except _HANDLED_INPUT_ERRORS:
             logger.debug("Handled error.")
         except Exception as e:
             unexpected_error(e, logger)
 
     def __get_stickers(self, update: Update, context: CallbackContext) -> None:
-        """ Sends all the stickers linked with a tag.   """
+        """Sends all the stickers linked with the requested tags (private chats only)."""
         try:
             message, user, chat = get_message_meta(update)
             query = GetStickersQuery(
-                user_id=user.id,
+                user_id=caller_id(update),
                 chat_id=chat.id,
                 chat_type=chat.type,
                 tags=tuple(context.args),
             )
-            result = self.__get_stickers_use_case(query)
-            for sticker_id in result.sticker_ids:
+            for sticker_id in self.__get_stickers_use_case(query).sticker_ids:
                 chat.send_sticker(sticker_id)
         except WrongInteractionContextError:
             message.reply_text("This command only works in private chats.")
-            try:
-                raise_wrong_context_error(
-                    msg=f"Command /get called by user {user.username} raised an exception.",
-                    cause=f"Chat type is {chat.type}.")
-            except WrongContextException:
-                logger.debug("Handled exception.")
+            self.__log_wrong_context(user.username, chat.type)
         except WrongContextException:
             logger.debug("Handled exception.")
         except BadRequest as e:
@@ -98,25 +109,31 @@ class StickerHandler(StickfixHandler):
             unexpected_error(e, logger)
 
     def __delete_from(self, update: Update, context: CallbackContext) -> None:
-        """ Deletes a sticker from the database. """
-        sticker: Sticker
+        """Answers the /deleteFrom command by unlinking the replied-to sticker."""
         try:
-            message, user, chat = get_message_meta(update)
-            reply_to = message.reply_to_message
-            check_reply(reply_to, message, "remove")
-            sticker = reply_to.sticker
-            check_sticker(sticker, message)
-            command = DeleteStickerCommand(
-                user_id=user.id,
-                chat_id=chat.id,
-                chat_type=chat.type,
-                reply_sticker_id=sticker.file_id,
-                tags=tuple(context.args),
+            message, _, chat = get_message_meta(update)
+            sticker = self.__replied_sticker(message, "remove")
+            self.__delete_sticker_use_case(
+                DeleteStickerCommand(
+                    user_id=caller_id(update),
+                    chat_id=chat.id,
+                    chat_type=chat.type,
+                    reply_sticker_id=sticker.file_id,
+                    tags=tuple(context.args),
+                )
             )
-            self.__delete_sticker_use_case(command)
-        except NoStickerException:
-            logger.debug("Handled error.")
-        except MissingStickerError:
+        except _HANDLED_INPUT_ERRORS:
             logger.debug("Handled error.")
         except Exception as e:
             unexpected_error(e, logger)
+
+    @staticmethod
+    def __log_wrong_context(username: str, chat_type: str) -> None:
+        """Log a `/get` used outside a private chat, after replying to the user."""
+        try:
+            raise_wrong_context_error(
+                msg=f"Command /get called by user {username} raised an exception.",
+                cause=f"Chat type is {chat_type}.",
+            )
+        except WrongContextException:
+            logger.debug("Handled exception.")

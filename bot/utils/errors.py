@@ -1,25 +1,26 @@
 """ "Stickfix" (c) by Ignacio Slater M.
-    "Stickfix" is licensed under a
-    Creative Commons Attribution 4.0 International License.
+"Stickfix" is licensed under a
+Creative Commons Attribution 4.0 International License.
 
-    You should have received a copy of the license along with this
-    work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+You should have received a copy of the license along with this
+work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
+
 from bot.utils.logger import StickfixLogger
 
 
 class StickfixException(Exception):
     """
     Base class for exceptions in this module
-    
+
     Attributes:
         err_message -- message sent by the error.
         err_cause -- reason that caused the exception.
     """
 
-    def __init__(self, err_message='', err_cause=None):
+    def __init__(self, err_message="", err_cause=None):
         self.message = err_message
-        self.cause = err_cause if err_cause is not None else 'UNKNOWN.'
+        self.cause = err_cause if err_cause is not None else "UNKNOWN."
 
 
 class InputException(StickfixException):
@@ -49,14 +50,19 @@ class InsufficientPermissionsException(StickfixException):
     """
 
 
-class Databasexception(StickfixException):
+class DatabaseException(StickfixException):
     """
     Exception raised when a database operation fails.
     """
 
 
+# Keep the historical misspelling importable for callers outside the bot.
+# cspell:disable-next-line
+Databasexception = DatabaseException
+
+
 def unexpected_error(e: Exception, a_logger: StickfixLogger):
-    """ Logs an unhandled exception.    """
+    """Logs an unhandled exception."""
     a_logger.critical("Unexpected error")
     a_logger.critical(str(type(e)))
     a_logger.critical(str(e.args))

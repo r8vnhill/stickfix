@@ -18,61 +18,72 @@ from telegram import (
 )
 from telegram.ext import CallbackContext, ChosenInlineResultHandler, Dispatcher, InlineQueryHandler
 
+from bot.application.ports import UserRepository
 from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
+from bot.application.results import InlineQueryResult
 from bot.application.use_cases.clear_inline_cache import ClearInlineCache
 from bot.application.use_cases.resolve_inline_query import ResolveInlineQuery
-from bot.database.storage import StickfixDB
 from bot.domain.services.sticker_pack_service import StickerPackService
-from bot.handlers.common import HELP_PATH, StickfixHandler
+from bot.handlers.common import HELP_PATH, StickfixHandler, optional_caller_id
 from bot.infrastructure.help.file_help_content_provider import FileHelpContentProvider
-from bot.infrastructure.persistence.stickfix_user_repository import StickfixUserRepository
 from bot.utils.errors import unexpected_error
 from bot.utils.logger import StickfixLogger
 
 logger = StickfixLogger(__name__)
 
+#: Maximum sticker results returned per inline-query page (Telegram allows 50).
+_INLINE_PAGE_LIMIT = 49
+
 
 class InlineHandler(StickfixHandler):
+    """Wire Telegram inline queries and chosen-result callbacks to their use cases.
+
+    ``__inline_get`` answers an inline query with a page of cached-sticker results
+    (plus an optional help article); ``__on_result`` clears the caller's inline
+    cache once they pick a result. Both keep only Telegram parsing/formatting -- the
+    ``ResolveInlineQuery`` and ``ClearInlineCache`` use cases own the logic. The
+    ``*_use_case`` constructor parameters exist so tests can inject fakes; when
+    omitted, ``_build_default_*`` assembles the real use case from infrastructure.
+    """
+
     def __init__(
         self,
         dispatcher: Dispatcher,
-        user_db: StickfixDB,
+        users: UserRepository,
         resolve_inline_query: ResolveInlineQuery | None = None,
         clear_inline_cache: ClearInlineCache | None = None,
     ) -> None:
-        super().__init__(dispatcher, user_db)
+        super().__init__(dispatcher, users)
         self._resolve_inline_query = (
-            resolve_inline_query or self._build_default_resolve_inline_query(user_db)
+            resolve_inline_query or self._build_default_resolve_inline_query(users)
         )
         self._clear_inline_cache = clear_inline_cache or self._build_default_clear_inline_cache(
-            user_db
+            users
         )
         self._dispatcher.add_handler(InlineQueryHandler(self.__inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self.__on_result))
 
     @staticmethod
     def _build_default_resolve_inline_query(
-        user_db: StickfixDB,
+        users: UserRepository,
     ) -> ResolveInlineQuery:
         """Build the default ResolveInlineQuery use case from infrastructure."""
-        repository = StickfixUserRepository(user_db)
         help_provider = FileHelpContentProvider(Path(HELP_PATH))
         pack_service = StickerPackService()
         return ResolveInlineQuery(
-            users=repository,
+            users=users,
             help_content=help_provider,
             stickers=pack_service,
         )
 
     @staticmethod
     def _build_default_clear_inline_cache(
-        user_db: StickfixDB,
+        users: UserRepository,
     ) -> ClearInlineCache:
         """Build the default ClearInlineCache use case from infrastructure."""
-        repository = StickfixUserRepository(user_db)
         pack_service = StickerPackService()
         return ClearInlineCache(
-            users=repository,
+            users=users,
             stickers=pack_service,
         )
 
@@ -84,40 +95,16 @@ class InlineHandler(StickfixHandler):
         """Get stickers matching inline query and answer with paginated results."""
         try:
             inline_query = update.inline_query
-            user = update.effective_user
-
-            # Parse Telegram data safely
-            user_id = str(user.id) if user is not None else None
-            offset = int(0 if not inline_query.offset else inline_query.offset)
-
-            # Build application request
             request = InlineQueryRequest(
-                user_id=user_id,
+                user_id=optional_caller_id(update),
                 query_text=inline_query.query,
-                offset=offset,
-                limit=49,
+                offset=int(inline_query.offset or 0),
+                limit=_INLINE_PAGE_LIMIT,
             )
-
-            # Delegate to application layer
             result = self._resolve_inline_query(request)
-
-            # Convert application result to Telegram result objects
-            telegram_results = []
-            if result.show_default_help and result.help_text is not None:
-                telegram_results.append(self._build_help_article(result))
-
-            for sticker_id in result.sticker_ids:
-                telegram_results.append(
-                    InlineQueryResultCachedSticker(
-                        id=str(uuid4()),
-                        sticker_file_id=sticker_id,
-                    )
-                )
-
-            # Answer the inline query
             context.bot.answer_inline_query(
                 inline_query.id,
-                telegram_results,
+                self._to_telegram_results(result),
                 cache_time=1,
                 is_personal=True,
                 next_offset=str(result.next_offset),
@@ -126,6 +113,17 @@ class InlineHandler(StickfixHandler):
             unexpected_error(e, logger)
             raise e
 
+    def _to_telegram_results(self, result: InlineQueryResult) -> list:
+        """Convert an application result into Telegram inline-result objects."""
+        telegram_results: list = []
+        if result.show_default_help and result.help_text is not None:
+            telegram_results.append(self._build_help_article(result))
+        telegram_results.extend(
+            InlineQueryResultCachedSticker(id=str(uuid4()), sticker_file_id=sticker_id)
+            for sticker_id in result.sticker_ids
+        )
+        return telegram_results
+
     def __on_result(
         self,
         update: Update,
@@ -133,33 +131,24 @@ class InlineHandler(StickfixHandler):
     ) -> None:
         """Clear cached stickers after a chosen inline result."""
         try:
-            user = update.effective_user
             chosen_result = update.chosen_inline_result
-
-            # Parse Telegram data safely
-            user_id = str(user.id) if user is not None else None
-
-            # Build application command
-            command = ClearInlineCacheCommand(
-                user_id=user_id,
-                query_text=chosen_result.query,
+            self._clear_inline_cache(
+                ClearInlineCacheCommand(
+                    user_id=optional_caller_id(update),
+                    query_text=chosen_result.query,
+                )
             )
-
-            # Delegate to application layer
-            self._clear_inline_cache(command)
-
-            # Log success
             logger.info(f"Answered inline query for {chosen_result.query}")
         except Exception as e:
             unexpected_error(e, logger)
 
-    def _build_help_article(self, result) -> InlineQueryResultArticle:
+    @staticmethod
+    def _build_help_article(result: InlineQueryResult) -> InlineQueryResultArticle:
         """Convert application result into a Telegram help article."""
-        display_title = "Click me for help"
         first_tag = result.default_tags[0] if result.default_tags else "help"
         return InlineQueryResultArticle(
             id=str(uuid4()),
-            title=display_title,
+            title="Click me for help",
             description=f"Try calling me inline like `@stickfixbot {first_tag}`",
             input_message_content=InputTextMessageContent(
                 result.help_text,

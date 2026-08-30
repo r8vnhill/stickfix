@@ -39,11 +39,10 @@ def test_run_delegates_to_polling_only_startup(monkeypatch: pytest.MonkeyPatch) 
     # touches neither Telegram nor the filesystem,
     updater = MagicMock(name="Updater")
     monkeypatch.setattr("bot.stickfix.Updater", MagicMock(return_value=updater))
-    monkeypatch.setattr("bot.stickfix.StickfixDB", MagicMock(name="StickfixDB"))
     for handler in ("HelperHandler", "UserHandler", "StickerHandler", "InlineHandler"):
         monkeypatch.setattr(f"bot.stickfix.{handler}", MagicMock(name=handler))
 
-    bot = Stickfix("dummy-token")
+    bot = Stickfix("dummy-token", users=MagicMock(name="UserRepository"))
 
     # when the public entry point runs,
     bot.run()

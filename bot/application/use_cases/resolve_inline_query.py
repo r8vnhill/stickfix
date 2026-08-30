@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from bot.application.errors import UserNotFoundError
-from bot.application.ports import HelpContentProvider, UserRepository
+from bot.application.ports import HelpContentProvider, PublicPackRepository, UserRepository
 from bot.application.requests import InlineQueryRequest
 from bot.application.results import InlineQueryResult
 from bot.domain.services import StickerPackService
 from bot.domain.user import StickfixUser
+
+from ._repositories import public_repository, resolve_effective_user, save_effective_pack
 
 
 class ResolveInlineQuery:
@@ -17,21 +18,23 @@ class ResolveInlineQuery:
         self,
         users: UserRepository,
         help_content: HelpContentProvider,
+        public: PublicPackRepository | None = None,
         stickers: StickerPackService | None = None,
     ) -> None:
         self._users = users
+        self._public = public_repository(users, public)
         self._help_content = help_content
         self._stickers = stickers or StickerPackService()
 
     def __call__(self, request: InlineQueryRequest) -> InlineQueryResult:
-        public_pack = self._users.get_public_pack()
-        user = self._resolve_request_user(request.user_id, public_pack)
+        public_pack = self._public.get()
+        user = resolve_effective_user(self._users, request.user_id, public_pack)
         tags = tuple(request.query_text.split(" "))
         sticker_ids = self._stickers.find_stickers(user, tags, public_pack)
         paginated_stickers = sticker_ids[request.offset : request.offset + request.limit]
         default_tags, help_text = self._resolve_default_help(request, user, public_pack)
 
-        self._users.save_user(user)
+        save_effective_pack(self._users, self._public, user, public_pack)
 
         return InlineQueryResult(
             sticker_ids=paginated_stickers,
@@ -40,18 +43,6 @@ class ResolveInlineQuery:
             help_text=help_text,
             next_offset=request.offset + request.limit,
         )
-
-    def _resolve_request_user(
-        self,
-        user_id: str | None,
-        public_pack: StickfixUser | None,
-    ) -> StickfixUser:
-        user = self._users.get_user(user_id) if user_id is not None else None
-        if user is not None:
-            return user
-        if public_pack is None:
-            raise UserNotFoundError("No user or public sticker pack exists.")
-        return public_pack
 
     def _resolve_default_help(
         self,

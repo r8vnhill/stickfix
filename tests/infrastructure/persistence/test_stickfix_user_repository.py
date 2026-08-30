@@ -3,7 +3,7 @@ from __future__ import annotations
 from hamcrest import assert_that, is_, none, same_instance
 
 from bot.domain.user import StickfixUser
-from bot.infrastructure.persistence import StickfixUserRepository
+from bot.infrastructure.persistence.stickfix_user_repository import StickfixUserRepository
 
 
 def test_repository_loads_existing_user_from_stickfixdb(store) -> None:
