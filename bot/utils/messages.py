@@ -7,15 +7,15 @@ work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
 import json
+import logging
 from enum import Enum
 from typing import Callable, Tuple, Union
 
 from telegram import Chat, Message, Sticker, Update, User
 
 from bot.utils.errors import InputException, NoStickerException, WrongContextException
-from bot.utils.logger import StickfixLogger
 
-module_logger = StickfixLogger(__name__)
+module_logger = logging.getLogger(__name__)
 
 
 def get_message_content(update: Update):

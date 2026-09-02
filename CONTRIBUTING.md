@@ -83,8 +83,10 @@ Describe any new CI steps in `.github/workflows/`.
 
 ## Legacy tooling
 
-The restricted YAML reader under `bot.infrastructure.migration` is for migration and recovery
-workflows only; it is not a runtime storage backend.
+The restricted YAML reader and `PostgresMigrationGateway` under
+`bot.infrastructure.migration` are for one-shot migration workflows only; they
+are not runtime storage adapters. Historical YAML is projected into immutable
+migration records and never instantiates live domain objects.
 
 The `requirements.txt` and `venv` setup workflows are deprecated. All contributions
 should use the `pyproject.toml` + `uv` + `ruff` workflow to keep the environment

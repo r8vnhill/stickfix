@@ -15,6 +15,9 @@ FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
         "bot.application",
         "bot.handlers",
         "bot.infrastructure",
+        "bot.utils",
+        "bot.database",
+        "logging",
     ),
     "bot.application": (
         "telegram",
@@ -26,6 +29,7 @@ FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
     ),
     "bot.handlers": (
         "bot.infrastructure.persistence",
+        "bot.infrastructure.migration",
         "bot.database",
         "sqlalchemy",
         "psycopg",
@@ -67,3 +71,18 @@ def test_layer_dependency_rules(package: str) -> None:
                 )
 
     assert not violations, "\n".join(violations)
+
+
+def test_runtime_composition_does_not_import_migration_infrastructure() -> None:
+    """The normal runtime graph must not load the one-shot migration path."""
+    runtime_imports = imported_modules(ROOT / "bot" / "stickfix.py")
+
+    violations = [
+        imported
+        for imported in runtime_imports
+        if violates(imported, "bot.infrastructure.migration")
+    ]
+
+    assert not violations, "runtime composition imports migration infrastructure: " + ", ".join(
+        violations
+    )

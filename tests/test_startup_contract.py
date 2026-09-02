@@ -18,6 +18,20 @@ import pytest
 
 from bot.stickfix import Stickfix, start_polling_service
 
+USE_CASE_NAMES = (
+    "EnsureUser",
+    "GetHelp",
+    "AddSticker",
+    "GetStickers",
+    "DeleteSticker",
+    "ResolveInlineQuery",
+    "ClearInlineCache",
+    "SetMode",
+    "SetShuffle",
+    "DeleteUser",
+)
+HANDLER_NAMES = ("HelperHandler", "UserHandler", "StickerHandler", "InlineHandler")
+
 
 def test_start_polling_service_starts_polling_and_never_webhook() -> None:
     """The startup seam starts polling exactly once and never a webhook server."""
@@ -56,3 +70,51 @@ def test_run_delegates_to_polling_only_startup(monkeypatch: pytest.MonkeyPatch) 
     updater.start_polling.assert_called_once_with()
     updater.start_webhook.assert_not_called()
     updater.listen.assert_not_called()
+
+
+def test_stickfix_composes_handlers_with_shared_application_collaborators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The composition root wires use cases and shares the help provider."""
+    updater = MagicMock(name="Updater")
+    dispatcher, help_provider, use_cases, handlers = _patch_composition(monkeypatch, updater)
+
+    users = MagicMock(name="UserRepository")
+    public = MagicMock(name="PublicPackRepository")
+    Stickfix("dummy-token", users=users, public=public)
+
+    use_cases["GetHelp"].assert_called_once_with(help_provider)
+    use_cases["ResolveInlineQuery"].assert_called_once()
+    assert use_cases["ResolveInlineQuery"].call_args.args[1] is help_provider
+    handlers["HelperHandler"].assert_called_once_with(
+        dispatcher,
+        use_cases["EnsureUser"].return_value,
+        use_cases["GetHelp"].return_value,
+    )
+    handlers["InlineHandler"].assert_called_once_with(
+        dispatcher,
+        use_cases["ResolveInlineQuery"].return_value,
+        use_cases["ClearInlineCache"].return_value,
+    )
+
+
+def _patch_composition(monkeypatch, updater):
+    dispatcher = MagicMock(name="Dispatcher")
+    updater.dispatcher = dispatcher
+    monkeypatch.setattr("bot.stickfix.Updater", MagicMock(return_value=updater))
+    help_provider = MagicMock(name="HelpContentProvider")
+    monkeypatch.setattr(
+        "bot.stickfix.FileHelpContentProvider", MagicMock(return_value=help_provider)
+    )
+    use_cases = _patch_named_collaborators(monkeypatch, USE_CASE_NAMES)
+    handlers = _patch_named_collaborators(monkeypatch, HANDLER_NAMES)
+    return dispatcher, help_provider, use_cases, handlers
+
+
+def _patch_named_collaborators(monkeypatch, names):
+    collaborators = {}
+    for name in names:
+        collaborator = MagicMock(name=name)
+        collaborators[name] = collaborator
+        monkeypatch.setattr(f"bot.stickfix.{name}", collaborator)
+    return collaborators

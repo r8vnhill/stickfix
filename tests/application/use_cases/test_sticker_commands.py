@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from hamcrest import assert_that, equal_to, is_
 
@@ -27,15 +29,17 @@ def make_command(**overrides: object) -> AddStickerCommand:
     return AddStickerCommand(**values)
 
 
-def test_add_sticker_uses_public_pack_port_by_default() -> None:
+def test_add_sticker_uses_public_pack_port_by_default(caplog: pytest.LogCaptureFixture) -> None:
     users = InMemoryUserRepository()
     public = InMemoryPublicPackRepository()
 
-    result = AddSticker(users, public)(make_command())
+    with caplog.at_level(logging.INFO, logger="bot.application.use_cases.add_sticker"):
+        result = AddSticker(users, public)(make_command())
 
     assert_that(result.changed, is_(True))
     assert_that(public.pack.stickers, equal_to({"wave": ["sticker-1"]}))
     assert_that(users.saved_users, equal_to([]))
+    assert_that(caplog.messages, equal_to(["Sticker added to public-pack pack with tags: wave"]))
 
 
 def test_add_sticker_writes_to_private_pack_when_private_mode_is_enabled() -> None:
@@ -123,7 +127,9 @@ def test_get_stickers_uses_private_user_pack_when_private_mode_is_enabled() -> N
     assert_that(result.sticker_ids, equal_to(("private",)))
 
 
-def test_delete_sticker_removes_from_public_pack_by_default() -> None:
+def test_delete_sticker_removes_from_public_pack_by_default(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     users = InMemoryUserRepository()
     public = InMemoryPublicPackRepository()
     public_pack = public.ensure()
@@ -131,10 +137,17 @@ def test_delete_sticker_removes_from_public_pack_by_default() -> None:
     public.save(public_pack)
     public.saved_packs.clear()
 
-    result = DeleteSticker(users, public)(DeleteStickerCommand(UserId(1), "sticker-1", ("wave",)))
+    with caplog.at_level(logging.INFO, logger="bot.application.use_cases.delete_sticker"):
+        result = DeleteSticker(users, public)(
+            DeleteStickerCommand(UserId(1), "sticker-1", ("wave",))
+        )
 
     assert_that(result.changed, is_(True))
     assert_that(public.pack.stickers, equal_to({}))
+    assert_that(
+        caplog.messages,
+        equal_to(["Removed sticker sticker-1 from tags wave"]),
+    )
 
 
 def test_delete_sticker_removes_from_private_pack_when_private_mode_is_enabled() -> None:

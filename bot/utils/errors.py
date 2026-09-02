@@ -6,7 +6,7 @@ You should have received a copy of the license along with this
 work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
-from bot.utils.logger import StickfixLogger
+import logging
 
 
 class StickfixException(Exception):
@@ -61,7 +61,7 @@ class DatabaseException(StickfixException):
 Databasexception = DatabaseException
 
 
-def unexpected_error(e: Exception, a_logger: StickfixLogger):
+def unexpected_error(e: Exception, a_logger: logging.Logger):
     """Logs an unhandled exception."""
     a_logger.critical("Unexpected error")
     a_logger.critical(str(type(e)))

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from bot.application.errors import MissingStickerError
 from bot.application.requests import AddStickerCommand
 from bot.application.results import AddStickerResult
 
 from ._base import StickerPackUseCase
 from ._repositories import save_effective_pack
+
+logger = logging.getLogger(__name__)
 
 
 class AddSticker(StickerPackUseCase):
@@ -16,7 +20,8 @@ class AddSticker(StickerPackUseCase):
     Tag resolution mirrors the legacy bot: an explicit ``tags`` argument wins,
     otherwise the sticker's own emoji becomes the single tag, otherwise the
     sticker is added untagged. The effective pack is persisted only when there is
-    at least one tag to link, matching :class:`StickerPackService` semantics.
+    at least one tag to link, matching :class:`StickerPackService` semantics. A
+    successful tagged write also emits an operational INFO record.
     """
 
     def __call__(self, command: AddStickerCommand) -> AddStickerResult:
@@ -29,6 +34,11 @@ class AddSticker(StickerPackUseCase):
         mutation = self._stickers.add_sticker(user, command.reply_sticker_id, tags, public_pack)
         if tags:
             save_effective_pack(self._users, self._public, mutation.effective_pack, public_pack)
+            logger.info(
+                "Sticker added to %s pack with tags: %s",
+                mutation.effective_pack.id,
+                ", ".join(tags),
+            )
         return AddStickerResult(
             sticker_id=command.reply_sticker_id,
             effective_tags=tags,

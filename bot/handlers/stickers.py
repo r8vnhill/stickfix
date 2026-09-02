@@ -6,6 +6,8 @@ You should have received a copy of the license along with this
 work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
+import logging
+
 from telegram import Message, Sticker, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
@@ -20,7 +22,6 @@ from bot.application.requests import (
 from bot.application.use_cases import AddSticker, DeleteSticker, GetStickers
 from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
-from bot.utils.logger import StickfixLogger
 from bot.utils.messages import (
     Commands,
     check_reply,
@@ -29,7 +30,7 @@ from bot.utils.messages import (
     raise_wrong_context_error,
 )
 
-logger = StickfixLogger(__name__)
+logger = logging.getLogger(__name__)
 
 #: Errors already reported to the user by ``bot.utils.messages`` helpers; the
 #: handler only needs to stop processing when one is raised.

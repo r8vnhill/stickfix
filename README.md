@@ -119,6 +119,9 @@ Domain and application code never import Telegram or SQLAlchemy.
 - **Infrastructure** (`bot.infrastructure`) — adapters implementing the ports:
   `persistence.postgres` (runtime), `help` (file provider), and `migration` (the
   one-shot legacy YAML importer, never loaded at runtime).
+- Operational logging is configured in `bot.infrastructure.logging`; domain and
+  application modules use Python's standard `logging` API without constructing
+  file or console handlers.
 
 Persistence model:
 
@@ -127,6 +130,8 @@ Persistence model:
   contracts (it survives only inside the legacy YAML reader).
 - `PostgresUserRepository` implements both ports and opens one transaction per
   mutation, so a use case that returns success has already committed.
+- Migration-only bulk import and full-snapshot verification are owned by
+  `PostgresMigrationGateway`; they are not part of the runtime repository ports.
 - `/start`, `/add`, `/get`, `/deleteFrom`, `/setMode`, `/shuffle`, `/deleteMe`, and
   inline queries all run through use cases; handlers keep only Telegram concerns.
 

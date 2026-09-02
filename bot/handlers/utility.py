@@ -6,6 +6,8 @@ You should have received a copy of the license along with this
 work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
+import logging
+
 from telegram import ParseMode, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
@@ -19,10 +21,9 @@ from bot.application.requests import (
 from bot.application.use_cases import DeleteUser, EnsureUser, GetHelp, SetMode, SetShuffle
 from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import unexpected_error
-from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, get_message_meta
 
-logger = StickfixLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def send_help_message(update: Update, context: CallbackContext, get_help: GetHelp) -> None:

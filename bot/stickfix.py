@@ -1,6 +1,7 @@
 """Stickfix bot bootstrap: builds the Telegram updater, wires handlers, and runs
 the bot through long polling (never PTB's Tornado webhook server)."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, cast
@@ -27,11 +28,11 @@ from bot.handlers.inline import InlineHandler
 from bot.handlers.stickers import StickerHandler
 from bot.handlers.utility import HelperHandler, UserHandler
 from bot.infrastructure.help import FileHelpContentProvider
+from bot.infrastructure.logging import configure_logging
 from bot.infrastructure.persistence.postgres import (
     PostgresUserRepository,
     create_engine_and_session_factory,
 )
-from bot.utils.logger import StickfixLogger
 
 DataDict = dict[str, Any]
 CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]
@@ -39,7 +40,7 @@ CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]
 
 def start_polling_service(
     updater: "Updater[CallbackCtx, DataDict, DataDict, DataDict]",
-    logger: StickfixLogger,
+    logger: logging.Logger,
 ) -> None:
     """Starts the bot's update transport in polling mode.
 
@@ -73,7 +74,7 @@ class Stickfix:
 
     __updater: Updater[CallbackCtx, DataDict, DataDict, DataDict]
     __dispatcher: Dispatcher[CallbackCtx, DataDict, DataDict, DataDict]
-    __logger: StickfixLogger
+    __logger: logging.Logger
     __users: UserRepository
     __public: PublicPackRepository
 
@@ -84,7 +85,7 @@ class Stickfix:
         database_url: str | None = None,
         public: PublicPackRepository | None = None,
     ):
-        self.__logger = StickfixLogger(__name__)
+        self.__logger = configure_logging("bot")
         self.__start_updater(token)
         self.__dispatcher = cast(
             "Dispatcher[CallbackCtx, DataDict, DataDict, DataDict]",
@@ -141,10 +142,7 @@ class Stickfix:
         return users, public
 
     def __setup_handlers(self) -> None:
-        """Composition root: build each use case once, inject it into a handler.
-
-        Keeps handlers free of infrastructure knowledge; the wiring lives here.
-        """
+        """Build each use case once and inject it into its Telegram adapter."""
         help_content = FileHelpContentProvider(Path(HELP_PATH))
         stickers = StickerPackService()
         ensure_user = EnsureUser(self.__users)

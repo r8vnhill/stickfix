@@ -4,10 +4,6 @@ import random
 from enum import Enum
 from typing import Dict, List, Set
 
-from bot.utils.logger import StickfixLogger
-
-logger = StickfixLogger(__name__)
-
 
 class UserModes(str, Enum):
     PRIVATE = "private"
@@ -89,7 +85,6 @@ class StickfixUser:
                 else:
                     aux = [sticker_id]
                 self.stickers[tag] = sorted(aux)
-        logger.info(f"Sticker added to {self.id} pack with tags: {', '.join(sticker_tags)}")
 
     def link_sticker(self, sticker_id, sticker_tags, public_user=None):
         self.get_effective_pack(public_user).add_sticker(sticker_id, sticker_tags)
@@ -162,8 +157,6 @@ class StickfixUser:
                 self.stickers[tag] = [x for x in self.stickers[tag] if x != sticker_id]
                 if len(self.stickers[tag]) == 0:
                     del self.stickers[tag]
-        if sticker_tags:
-            logger.info(f"Removed sticker {sticker_id} from tags {', '.join(sticker_tags)}")
 
     def unlink_sticker_from_pack(self, sticker_id, sticker_tags, public_user=None):
         self.get_effective_pack(public_user).unlink_sticker(sticker_id, sticker_tags)

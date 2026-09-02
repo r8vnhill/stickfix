@@ -9,8 +9,7 @@ Association storage is normalised into ``tags`` plus four ordered join tables
 (user/public x sticker/cache). Reads and writes for all four go through the two
 generic helpers :meth:`_load_associations` and :meth:`_save_associations`; the only
 per-table detail is a small row-factory function (``_user_sticker_tag_row`` and
-friends). ``import_mapping`` is the migration entry point and is the one method that
-touches several tables in a single transaction.
+friends). Historical bulk import lives in the migration-only PostgreSQL gateway.
 """
 
 from __future__ import annotations
@@ -39,16 +38,6 @@ from .models import (
 # A row factory takes ``(tag_id, sticker_id, position)`` and returns a join-table row.
 RowFactory = Callable[[int, str, int], object]
 
-_EMPTY_TARGET_MODELS = (
-    UserRow,
-    StickerRow,
-    TagRow,
-    UserStickerTagRow,
-    PublicStickerTagRow,
-    UserCachedStickerRow,
-    PublicCachedStickerRow,
-)
-
 
 class PostgresUserRepository(UserRepository, PublicPackRepository):
     """Persist users and the public pack using one transaction per mutation."""
@@ -73,16 +62,6 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
         with self._session_factory() as session:
             return session.get(UserRow, int(user_id)) is not None
 
-    def iter_user_ids(self) -> tuple[UserId, ...]:
-        """Return all regular IDs, sorted, for migration verification and diagnostics."""
-        with self._session_factory() as session:
-            rows = session.scalars(select(UserRow.telegram_id).order_by(UserRow.telegram_id)).all()
-            return tuple(UserId(value) for value in rows)
-
-    def is_empty(self) -> bool:
-        with self._session_factory() as session:
-            return session.scalar(select(UserRow.telegram_id).limit(1)) is None
-
     # -- UserRepository writes ---------------------------------------------
 
     def save_user(self, user: StickfixUser) -> None:
@@ -104,21 +83,6 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
             session.delete(row)
             return True
 
-    def import_mapping(self, users: Mapping[object, StickfixUser]) -> None:
-        """Import a pre-validated legacy mapping into an empty database, atomically."""
-        with self._session_factory() as session, session.begin():
-            self._require_empty(session)
-            public_pack: StickfixUser | None = None
-            for key, user in users.items():
-                if str(key) == SF_PUBLIC or user.id == SF_PUBLIC:
-                    if public_pack is not None:
-                        raise ValueError("legacy mapping contains more than one public pack")
-                    public_pack = user
-                    continue
-                self._insert_user(session, _require_user_id(int(str(key))), user)
-            if public_pack is not None:
-                self._write_public_pack(session, public_pack)
-
     # -- PublicPackRepository --------------------------------------------
 
     def get(self) -> StickfixUser | None:
@@ -139,17 +103,6 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
         return self.get() or StickfixUser(SF_PUBLIC)
 
     # -- shared write helpers -------------------------------------------
-
-    def _insert_user(self, session: Session, user_id: int, user: StickfixUser) -> None:
-        session.add(
-            UserRow(
-                telegram_id=user_id,
-                private_mode=bool(user.private_mode),
-                shuffle=bool(user.shuffle),
-            )
-        )
-        session.flush()
-        self._replace_user_rows(session, user_id, user)
 
     def _replace_user_rows(self, session: Session, user_id: int, user: StickfixUser) -> None:
         session.execute(delete(UserStickerTagRow).where(UserStickerTagRow.user_id == user_id))
@@ -181,12 +134,6 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
         for tag, sticker_ids in associations.items():
             for position, sticker_id in enumerate(sticker_ids):
                 session.add(make_row(tags[tag], sticker_id, position))
-
-    @staticmethod
-    def _require_empty(session: Session) -> None:
-        for model in _EMPTY_TARGET_MODELS:
-            if session.scalar(select(model).limit(1)) is not None:
-                raise ValueError("target database must be empty before import")
 
     @staticmethod
     def _ensure_sticker(session: Session, sticker_id: str) -> None:
