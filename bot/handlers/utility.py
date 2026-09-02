@@ -10,15 +10,14 @@ from telegram import ParseMode, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.application.errors import InvalidCommandInputError
-from bot.application.ports import UserRepository
 from bot.application.requests import (
     DeleteUserCommand,
     EnsureUserCommand,
     SetModeCommand,
     SetShuffleCommand,
 )
-from bot.application.use_cases import DeleteUser, EnsureUser, SetMode, SetShuffle
-from bot.handlers.common import HELP_PATH, StickfixHandler, caller_id
+from bot.application.use_cases import DeleteUser, EnsureUser, GetHelp, SetMode, SetShuffle
+from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import unexpected_error
 from bot.utils.logger import StickfixLogger
 from bot.utils.messages import Commands, get_message_meta
@@ -26,15 +25,11 @@ from bot.utils.messages import Commands, get_message_meta
 logger = StickfixLogger(__name__)
 
 
-def send_help_message(update: Update, context: CallbackContext) -> None:
-    """Send the contents of ``HELP.md`` to the chat as Markdown (module-level so
-    `/help` works without a per-user record)."""
+def send_help_message(update: Update, context: CallbackContext, get_help: GetHelp) -> None:
+    """Send application-provided help content to the chat as Markdown."""
     try:
         _, _, chat = get_message_meta(update)
-        with open(HELP_PATH, "r", encoding="utf-8") as help_file:
-            context.bot.send_message(
-                chat_id=chat.id, text=help_file.read(), parse_mode=ParseMode.MARKDOWN
-            )
+        context.bot.send_message(chat_id=chat.id, text=get_help(), parse_mode=ParseMode.MARKDOWN)
         logger.info(f"Sent help message to {chat.username}.")
     except Exception as e:
         unexpected_error(e, logger)
@@ -43,11 +38,16 @@ def send_help_message(update: Update, context: CallbackContext) -> None:
 class HelperHandler(StickfixHandler):
     """Handle `/start` (greet + register the caller) and `/help` (send HELP.md)."""
 
-    def __init__(self, dispatcher: Dispatcher, users: UserRepository):
-        super().__init__(dispatcher, users)
-        self.__ensure_user_use_case = EnsureUser(users)
+    def __init__(self, dispatcher: Dispatcher, ensure_user: EnsureUser, get_help: GetHelp):
+        super().__init__(dispatcher)
+        self.__ensure_user_use_case = ensure_user
         self._dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
-        self._dispatcher.add_handler(CommandHandler(Commands.HELP, send_help_message))
+        self._dispatcher.add_handler(
+            CommandHandler(
+                Commands.HELP,
+                lambda update, context: send_help_message(update, context, get_help),
+            )
+        )
 
     def __send_hello_message(self, update: Update, context: CallbackContext) -> None:
         """Answers the /start command with a hello sticker and adds the user to the database."""
@@ -61,11 +61,17 @@ class HelperHandler(StickfixHandler):
 class UserHandler(StickfixHandler):
     """Handle the per-user preference/lifecycle commands: `/setMode`, `/shuffle`, `/deleteMe`."""
 
-    def __init__(self, dispatcher: Dispatcher, users: UserRepository):
-        super().__init__(dispatcher, users)
-        self.__set_mode_use_case = SetMode(users)
-        self.__set_shuffle_use_case = SetShuffle(users)
-        self.__delete_user_use_case = DeleteUser(users)
+    def __init__(
+        self,
+        dispatcher: Dispatcher,
+        set_mode: SetMode,
+        set_shuffle: SetShuffle,
+        delete_user: DeleteUser,
+    ):
+        super().__init__(dispatcher)
+        self.__set_mode_use_case = set_mode
+        self.__set_shuffle_use_case = set_shuffle
+        self.__delete_user_use_case = delete_user
         self._dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
         self._dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
         self._dispatcher.add_handler(

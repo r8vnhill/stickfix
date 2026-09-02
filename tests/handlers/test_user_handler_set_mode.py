@@ -41,9 +41,7 @@ class FakeMessage:
 
 
 def make_handler(use_case: FakeUseCase) -> UserHandler:
-    handler = UserHandler(FakeDispatcher(), {})
-    handler._UserHandler__set_mode_use_case = use_case
-    return handler
+    return UserHandler(FakeDispatcher(), use_case, FakeUseCase(), FakeUseCase())
 
 
 def make_update(message: FakeMessage):

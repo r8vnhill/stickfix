@@ -3,26 +3,21 @@
 from __future__ import annotations
 
 from bot.application.errors import MissingStickerError
-from bot.application.ports import PublicPackRepository, UserRepository
 from bot.application.requests import AddStickerCommand
 from bot.application.results import AddStickerResult
-from bot.domain.services import StickerPackService
 
-from ._repositories import public_repository, save_effective_pack
+from ._base import StickerPackUseCase
+from ._repositories import save_effective_pack
 
 
-class AddSticker:
-    """Add a sticker to the public or private pack selected by user settings."""
+class AddSticker(StickerPackUseCase):
+    """Add a sticker to the public or private pack selected by user settings.
 
-    def __init__(
-        self,
-        users: UserRepository,
-        public: PublicPackRepository | None = None,
-        stickers: StickerPackService | None = None,
-    ) -> None:
-        self._users = users
-        self._public = public_repository(users, public)
-        self._stickers = stickers or StickerPackService()
+    Tag resolution mirrors the legacy bot: an explicit ``tags`` argument wins,
+    otherwise the sticker's own emoji becomes the single tag, otherwise the
+    sticker is added untagged. The effective pack is persisted only when there is
+    at least one tag to link, matching :class:`StickerPackService` semantics.
+    """
 
     def __call__(self, command: AddStickerCommand) -> AddStickerResult:
         if command.reply_sticker_id is None:

@@ -6,7 +6,6 @@ You should have received a copy of the license along with this
 work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
-from pathlib import Path
 from uuid import uuid4
 
 from telegram import (
@@ -18,14 +17,11 @@ from telegram import (
 )
 from telegram.ext import CallbackContext, ChosenInlineResultHandler, Dispatcher, InlineQueryHandler
 
-from bot.application.ports import UserRepository
 from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
 from bot.application.results import InlineQueryResult
 from bot.application.use_cases.clear_inline_cache import ClearInlineCache
 from bot.application.use_cases.resolve_inline_query import ResolveInlineQuery
-from bot.domain.services.sticker_pack_service import StickerPackService
-from bot.handlers.common import HELP_PATH, StickfixHandler, optional_caller_id
-from bot.infrastructure.help.file_help_content_provider import FileHelpContentProvider
+from bot.handlers.common import StickfixHandler, optional_caller_id
 from bot.utils.errors import unexpected_error
 from bot.utils.logger import StickfixLogger
 
@@ -42,50 +38,20 @@ class InlineHandler(StickfixHandler):
     (plus an optional help article); ``__on_result`` clears the caller's inline
     cache once they pick a result. Both keep only Telegram parsing/formatting -- the
     ``ResolveInlineQuery`` and ``ClearInlineCache`` use cases own the logic. The
-    ``*_use_case`` constructor parameters exist so tests can inject fakes; when
-    omitted, ``_build_default_*`` assembles the real use case from infrastructure.
+    Application collaborators are composed by ``Stickfix`` and injected here.
     """
 
     def __init__(
         self,
         dispatcher: Dispatcher,
-        users: UserRepository,
-        resolve_inline_query: ResolveInlineQuery | None = None,
-        clear_inline_cache: ClearInlineCache | None = None,
+        resolve_inline_query: ResolveInlineQuery,
+        clear_inline_cache: ClearInlineCache,
     ) -> None:
-        super().__init__(dispatcher, users)
-        self._resolve_inline_query = (
-            resolve_inline_query or self._build_default_resolve_inline_query(users)
-        )
-        self._clear_inline_cache = clear_inline_cache or self._build_default_clear_inline_cache(
-            users
-        )
+        super().__init__(dispatcher)
+        self._resolve_inline_query = resolve_inline_query
+        self._clear_inline_cache = clear_inline_cache
         self._dispatcher.add_handler(InlineQueryHandler(self.__inline_get))
         self._dispatcher.add_handler(ChosenInlineResultHandler(self.__on_result))
-
-    @staticmethod
-    def _build_default_resolve_inline_query(
-        users: UserRepository,
-    ) -> ResolveInlineQuery:
-        """Build the default ResolveInlineQuery use case from infrastructure."""
-        help_provider = FileHelpContentProvider(Path(HELP_PATH))
-        pack_service = StickerPackService()
-        return ResolveInlineQuery(
-            users=users,
-            help_content=help_provider,
-            stickers=pack_service,
-        )
-
-    @staticmethod
-    def _build_default_clear_inline_cache(
-        users: UserRepository,
-    ) -> ClearInlineCache:
-        """Build the default ClearInlineCache use case from infrastructure."""
-        pack_service = StickerPackService()
-        return ClearInlineCache(
-            users=users,
-            stickers=pack_service,
-        )
 
     def __inline_get(
         self,
@@ -135,7 +101,6 @@ class InlineHandler(StickfixHandler):
             self._clear_inline_cache(
                 ClearInlineCacheCommand(
                     user_id=optional_caller_id(update),
-                    query_text=chosen_result.query,
                 )
             )
             logger.info(f"Answered inline query for {chosen_result.query}")

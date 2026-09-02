@@ -18,10 +18,11 @@ from telegram.ext import ChosenInlineResultHandler, InlineQueryHandler
 
 from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
 from bot.application.results import AcknowledgementResult, InlineQueryResult
-from bot.application.use_cases.clear_inline_cache import ClearInlineCache
-from bot.application.use_cases.resolve_inline_query import ResolveInlineQuery
-from bot.domain.user import SF_PUBLIC, StickfixUser
+from bot.application.use_cases import ClearInlineCache, ResolveInlineQuery
+from bot.domain.identifiers import UserId
+from bot.domain.user import StickfixUser
 from bot.handlers.inline import InlineHandler
+from tests.support.repositories import InMemoryPublicPackRepository, InMemoryUserRepository
 
 
 class FakeDispatcher:
@@ -32,27 +33,15 @@ class FakeDispatcher:
         self.handlers.append(handler)
 
 
-class FakeUserStore:
+class FakeRepositories:
     def __init__(self) -> None:
-        self.users: dict[object, StickfixUser] = {}
-        self.writes: list[tuple[object, StickfixUser]] = []
+        self.users = InMemoryUserRepository()
+        self.public = InMemoryPublicPackRepository()
 
-    def __contains__(self, key: object) -> bool:
-        return key in self.users
 
-    def __getitem__(self, key: object) -> StickfixUser:
-        return self.users[key]
-
-    def __setitem__(self, key: object, value: StickfixUser) -> None:
-        self.users[key] = value
-        self.writes.append((key, value))
-
-    def __delitem__(self, key: object) -> None:
-        del self.users[key]
-
-    def get(self, key: object) -> StickfixUser | None:
-        """Get a user or return None if not found."""
-        return self.users.get(key)
+class FakeHelpContentProvider:
+    def get_help_text(self) -> str:
+        return "help text"
 
 
 class FakeBot:
@@ -121,16 +110,15 @@ class FakeUpdate:
 
 
 def make_handler(
-    store: FakeUserStore,
+    store: FakeRepositories,
     resolve_inline_query: ResolveInlineQuery | None = None,
     clear_inline_cache: ClearInlineCache | None = None,
 ) -> InlineHandler:
-    return InlineHandler(
-        FakeDispatcher(),
-        store,
-        resolve_inline_query=resolve_inline_query,
-        clear_inline_cache=clear_inline_cache,
+    resolve = resolve_inline_query or ResolveInlineQuery(
+        store.users, FakeHelpContentProvider(), store.public
     )
+    clear = clear_inline_cache or ClearInlineCache(store.users, store.public)
+    return InlineHandler(FakeDispatcher(), resolve, clear)
 
 
 def inline_query_handler(dispatcher: FakeDispatcher) -> InlineQueryHandler:
@@ -153,18 +141,18 @@ def chosen_result_callback(dispatcher: FakeDispatcher) -> Callable[..., object]:
     return chosen_result_handler(dispatcher).callback
 
 
-def make_public_pack(store: FakeUserStore) -> StickfixUser:
-    public_pack = StickfixUser(SF_PUBLIC)
-    store[SF_PUBLIC] = public_pack
-    store.writes.clear()
+def make_public_pack(store: FakeRepositories) -> StickfixUser:
+    public_pack = store.public.ensure()
+    store.public.save(public_pack)
+    store.public.saved_packs.clear()
     return public_pack
 
 
-def make_user(store: FakeUserStore, user_id: int, *, private_mode: bool = False) -> StickfixUser:
-    user = StickfixUser(str(user_id))
+def make_user(store: FakeRepositories, user_id: int, *, private_mode: bool = False) -> StickfixUser:
+    user = StickfixUser(UserId(user_id))
     user.private_mode = private_mode
-    store[str(user_id)] = user
-    store.writes.clear()
+    store.users.save_user(user)
+    store.users.saved_users.clear()
     return user
 
 
@@ -176,11 +164,15 @@ def add_numbered_stickers(user: StickfixUser, tag: str, count: int) -> tuple[str
 
 
 def test_inline_handler_registers_inline_query_and_chosen_result_handlers() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     dispatcher = FakeDispatcher()
 
-    InlineHandler(dispatcher, store)
+    InlineHandler(
+        dispatcher,
+        ResolveInlineQuery(store.users, FakeHelpContentProvider(), store.public),
+        ClearInlineCache(store.users, store.public),
+    )
 
     assert_that(dispatcher.handlers, has_length(2))
     assert_that(inline_query_handler(dispatcher), instance_of(InlineQueryHandler))
@@ -227,7 +219,7 @@ def test_empty_inline_query_at_first_page_includes_help_article_before_stickers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(random, "choice", lambda tags: "wave")
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     public_pack.add_sticker("empty-query-sticker", [""])
     public_pack.add_sticker("default-tag-sticker", ["wave"])
@@ -246,7 +238,7 @@ def test_empty_inline_query_at_first_page_includes_help_article_before_stickers(
 
 
 def test_non_empty_inline_query_returns_cached_sticker_results_without_help_article() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     expected_stickers = add_numbered_stickers(public_pack, "wave", 2)
     bot = FakeBot()
@@ -263,7 +255,7 @@ def test_non_empty_inline_query_returns_cached_sticker_results_without_help_arti
 
 
 def test_inline_query_first_page_returns_49_cached_stickers_with_set_materialized_order() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     expected_stickers = add_numbered_stickers(public_pack, "wave", 60)
     bot = FakeBot()
@@ -279,7 +271,7 @@ def test_inline_query_first_page_returns_49_cached_stickers_with_set_materialize
 
 
 def test_inline_query_second_page_applies_offset_to_set_materialized_sticker_list() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     expected_stickers = add_numbered_stickers(public_pack, "wave", 100)
     bot = FakeBot()
@@ -307,7 +299,7 @@ def test_inline_query_resolves_current_public_private_fallback_behaviour(
     private_mode: bool,
     expected_sticker_id: tuple[str, ...],
 ) -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     public_pack.add_sticker("public-sticker", ["wave"])
     if user_exists:
@@ -324,7 +316,7 @@ def test_inline_query_resolves_current_public_private_fallback_behaviour(
 
 
 def test_chosen_result_clears_existing_user_cache_and_writes_user_back() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     user = make_user(store, 123, private_mode=True)
     user.cache["wave"] = ["cached-sticker"]
@@ -337,13 +329,13 @@ def test_chosen_result_clears_existing_user_cache_and_writes_user_back() -> None
     make_handler(store)._InlineHandler__on_result(update, FakeContext(bot=bot))
 
     assert_that(user.cache, equal_to({}))
-    assert_that(store.writes, equal_to([("123", user)]))
+    assert_that(store.users.saved_users, equal_to([user]))
 
 
 def test_chosen_result_for_missing_user_clears_public_pack_cache_and_writes_public_pack_back() -> (
     None
 ):
-    store = FakeUserStore()
+    store = FakeRepositories()
     public_pack = make_public_pack(store)
     public_pack.cache["wave"] = ["cached-sticker"]
     bot = FakeBot()
@@ -355,11 +347,11 @@ def test_chosen_result_for_missing_user_clears_public_pack_cache_and_writes_publ
     make_handler(store)._InlineHandler__on_result(update, FakeContext(bot=bot))
 
     assert_that(public_pack.cache, equal_to({}))
-    assert_that(store.writes, equal_to([(SF_PUBLIC, public_pack)]))
+    assert_that(store.public.saved_packs, equal_to([public_pack]))
 
 
 def test_invalid_inline_query_offset_raises_value_error_and_does_not_answer_or_write() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     bot = FakeBot()
 
@@ -367,14 +359,15 @@ def test_invalid_inline_query_offset_raises_value_error_and_does_not_answer_or_w
         call_inline_get(make_handler(store), bot, query="wave", offset="not-an-int")
 
     assert_that(bot.answer_inline_query_calls, empty())
-    assert_that(store.writes, empty())
+    assert_that(store.users.saved_users, empty())
+    assert_that(store.public.saved_packs, empty())
 
 
 # Tests for request/command mapping with fake use cases
 
 
 def test_inline_query_builds_request_with_user_id_when_effective_user_exists() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeResolveInlineQuery()
     bot = FakeBot()
@@ -388,7 +381,7 @@ def test_inline_query_builds_request_with_user_id_when_effective_user_exists() -
 
 
 def test_inline_query_builds_request_with_none_user_id_when_effective_user_is_none() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeResolveInlineQuery()
     bot = FakeBot()
@@ -405,7 +398,7 @@ def test_inline_query_builds_request_with_none_user_id_when_effective_user_is_no
 
 
 def test_inline_query_builds_request_with_query_text_and_offset() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeResolveInlineQuery()
     bot = FakeBot()
@@ -421,7 +414,7 @@ def test_inline_query_builds_request_with_query_text_and_offset() -> None:
 
 
 def test_inline_query_builds_help_article_from_application_result() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
 
     class CustomResolveInlineQuery:
@@ -445,7 +438,7 @@ def test_inline_query_builds_help_article_from_application_result() -> None:
 
 
 def test_chosen_result_builds_command_with_user_id_when_effective_user_exists() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeClearInlineCache()
     bot = FakeBot()
@@ -463,7 +456,7 @@ def test_chosen_result_builds_command_with_user_id_when_effective_user_exists() 
 
 
 def test_chosen_result_builds_command_with_none_user_id_when_effective_user_is_none() -> None:
-    store = FakeUserStore()
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeClearInlineCache()
     bot = FakeBot()
@@ -480,8 +473,8 @@ def test_chosen_result_builds_command_with_none_user_id_when_effective_user_is_n
     assert_that(fake_use_case.calls[0].user_id, equal_to(None))
 
 
-def test_chosen_result_builds_command_with_query_text() -> None:
-    store = FakeUserStore()
+def test_chosen_result_does_not_send_query_text_across_application_boundary() -> None:
+    store = FakeRepositories()
     make_public_pack(store)
     fake_use_case = FakeClearInlineCache()
     bot = FakeBot()
@@ -494,4 +487,4 @@ def test_chosen_result_builds_command_with_query_text() -> None:
         update, FakeContext(bot=bot)
     )
 
-    assert_that(fake_use_case.calls[0].query_text, equal_to("wave moon"))
+    assert_that(fake_use_case.calls[0], equal_to(ClearInlineCacheCommand(user_id=123)))

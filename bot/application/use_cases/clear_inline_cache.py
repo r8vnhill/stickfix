@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
-from bot.application.ports import PublicPackRepository, UserRepository
 from bot.application.requests import ClearInlineCacheCommand
 from bot.application.results import AcknowledgementResult
-from bot.domain.services import StickerPackService
 
-from ._repositories import public_repository, resolve_effective_user, save_effective_pack
+from ._base import StickerPackUseCase
+from ._repositories import resolve_effective_user, save_effective_pack
 
 
-class ClearInlineCache:
-    """Clear cached stickers for the effective inline cache owner."""
+class ClearInlineCache(StickerPackUseCase):
+    """Drop the cached-sticker list from whichever pack served the inline query.
 
-    def __init__(
-        self,
-        users: UserRepository,
-        public: PublicPackRepository | None = None,
-        stickers: StickerPackService | None = None,
-    ) -> None:
-        self._users = users
-        self._public = public_repository(users, public)
-        self._stickers = stickers or StickerPackService()
+    Telegram fires ``chosen_inline_result`` after a user picks a sticker; the
+    handler calls this to invalidate the per-owner cache so the next inline query
+    is recomputed. The owner is the caller's private pack when they are in private
+    mode, otherwise the shared public pack (see :func:`resolve_effective_user` and
+    ``StickerPackService.resolve_effective_pack``).
+    """
 
     def __call__(self, command: ClearInlineCacheCommand) -> AcknowledgementResult:
         public_pack = self._public.get()

@@ -1,11 +1,85 @@
 {
   "cSpell.words": [
+    "apscheduler",
+    "alice",
     "autouse",
+    "behaviour",
+    "CAADBAADTAA",
+    "cachetools",
+    "certifi",
+    "cfgv",
+    "centralising",
+    "coloredlogs",
+    "colorama",
+    "datefmt",
+    "delenv",
+    "distlib",
+    "filelock",
+    "GHSA",
+    "hamcrest",
+    "humanfriendly",
+    "importlib",
+    "imghdr",
+    "iniconfig",
+    "isready",
+    "isort",
     "levelname",
+    "markupsafe",
+    "newbot",
+    "nodeenv",
+    "numpy",
+    "norecursedirs",
+    "NOTSET",
+    "ondelete",
+    "pgvector",
+    "platformdirs",
+    "pluggy",
+    "poolclass",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONUNBUFFERED",
+    "postgres",
+    "psycopg",
+    "pytestmark",
+    "pyhamcrest",
+    "pyreadline",
+    "pyyaml",
+    "pypy",
+    "pytz",
+    "qjxf",
+    "qualname",
+    "normalised",
+    "normalises",
+    "sdist",
+    "setenv",
+    "setuptools",
+    "sessionmaker",
+    "sortedcontainers",
+    "sqlalchemy",
     "stickfix",
-    "stickfixbot"
+    "stickfixbot",
+    "stickfixdb",
+    "tzdata",
+    "tzlocal",
+    "urllib",
+    "virtualenv",
+    "worktmp",
+    "yourbotusername"
   ],
+  "cSpell.ignorePaths": [
+    "uv.lock"
+  ],
+  // Keep TOML files (pyproject.toml, ruff.toml) on the `toml` language so the
+  // Ruff extension does not try to parse them as Python and report spurious
+  // "Invalid assignment target" syntax errors.
+  "files.associations": {
+    "*.toml": "toml"
+  },
   "python.defaultInterpreterPath": "e:\\dev\\APPLICATIONS\\Bots\\Telegram\\stickfix\\.venv\\Scripts\\python.exe",
+  // Stickfix standardizes on Ruff (see ruff.toml) for linting and formatting.
+  // There is no pylintrc, and Pylint's stock conventions (e.g. mandatory module
+  // and function docstrings on tests) are noise that the codebase deliberately
+  // does not follow. Disable it so diagnostics come from Ruff only.
+  "pylint.enabled": false,
   "spellright.documentTypes": [
     "markdown",
     "latex",
@@ -30,6 +104,6 @@
   "workbench.colorTheme": "Tokyo Night",
   "[python]": {
     "editor.wordWrap": "wordWrapColumn",
-    "editor.wordWrapColumn": 100
+    "editor.wordWrapColumn": 120
   }
 }

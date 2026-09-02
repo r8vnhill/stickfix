@@ -8,23 +8,29 @@ from bot.application.results import InlineQueryResult
 from bot.domain.services import StickerPackService
 from bot.domain.user import StickfixUser
 
-from ._repositories import public_repository, resolve_effective_user, save_effective_pack
+from ._base import StickerPackUseCase
+from ._repositories import resolve_effective_user, save_effective_pack
 
 
-class ResolveInlineQuery:
-    """Resolve stickers and default-help metadata for Telegram inline queries."""
+class ResolveInlineQuery(StickerPackUseCase):
+    """Turn an inline query into one page of sticker ids plus optional help.
+
+    The empty query at ``offset == 0`` is special-cased: it returns a random
+    default tag and the help text so the client can show a "how to use me"
+    article; every other query just paginates the matched stickers. The effective
+    pack is saved on each call because :class:`StickerPackService` may reshuffle
+    or refresh its cache as a side effect of the lookup.
+    """
 
     def __init__(
         self,
         users: UserRepository,
         help_content: HelpContentProvider,
-        public: PublicPackRepository | None = None,
+        public: PublicPackRepository,
         stickers: StickerPackService | None = None,
     ) -> None:
-        self._users = users
-        self._public = public_repository(users, public)
+        super().__init__(users, public, stickers)
         self._help_content = help_content
-        self._stickers = stickers or StickerPackService()
 
     def __call__(self, request: InlineQueryRequest) -> InlineQueryResult:
         public_pack = self._public.get()

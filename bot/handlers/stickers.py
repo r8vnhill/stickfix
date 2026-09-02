@@ -11,8 +11,12 @@ from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
 from bot.application.errors import MissingStickerError, WrongInteractionContextError
-from bot.application.ports import UserRepository
-from bot.application.requests import AddStickerCommand, DeleteStickerCommand, GetStickersQuery
+from bot.application.requests import (
+    AddStickerCommand,
+    DeleteStickerCommand,
+    GetStickersQuery,
+    InteractionScope,
+)
 from bot.application.use_cases import AddSticker, DeleteSticker, GetStickers
 from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
@@ -41,11 +45,17 @@ class StickerHandler(StickfixHandler):
     ``NoStickerException`` after already telling the user what went wrong.
     """
 
-    def __init__(self, dispatcher: Dispatcher, users: UserRepository):
-        super().__init__(dispatcher, users)
-        self.__add_sticker_use_case = AddSticker(users)
-        self.__get_stickers_use_case = GetStickers(users)
-        self.__delete_sticker_use_case = DeleteSticker(users)
+    def __init__(
+        self,
+        dispatcher: Dispatcher,
+        add_sticker: AddSticker,
+        get_stickers: GetStickers,
+        delete_sticker: DeleteSticker,
+    ):
+        super().__init__(dispatcher)
+        self.__add_sticker_use_case = add_sticker
+        self.__get_stickers_use_case = get_stickers
+        self.__delete_sticker_use_case = delete_sticker
         self._dispatcher.add_handler(
             CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True)
         )
@@ -68,13 +78,11 @@ class StickerHandler(StickfixHandler):
     def __add_sticker(self, update: Update, context: CallbackContext) -> None:
         """Answers the /add command by adding the replied-to sticker to the DB."""
         try:
-            msg, _, chat = get_message_meta(update)
+            msg, _, _ = get_message_meta(update)
             sticker = self.__replied_sticker(msg)
             self.__add_sticker_use_case(
                 AddStickerCommand(
                     user_id=caller_id(update),
-                    chat_id=chat.id,
-                    chat_type=chat.type,
                     reply_sticker_id=sticker.file_id,
                     reply_sticker_emoji=sticker.emoji,
                     tags=tuple(context.args),
@@ -92,8 +100,11 @@ class StickerHandler(StickfixHandler):
             message, user, chat = get_message_meta(update)
             query = GetStickersQuery(
                 user_id=caller_id(update),
-                chat_id=chat.id,
-                chat_type=chat.type,
+                interaction_scope=(
+                    InteractionScope.PRIVATE
+                    if chat.type == "private"
+                    else InteractionScope.NON_PRIVATE
+                ),
                 tags=tuple(context.args),
             )
             for sticker_id in self.__get_stickers_use_case(query).sticker_ids:
@@ -111,13 +122,11 @@ class StickerHandler(StickfixHandler):
     def __delete_from(self, update: Update, context: CallbackContext) -> None:
         """Answers the /deleteFrom command by unlinking the replied-to sticker."""
         try:
-            message, _, chat = get_message_meta(update)
+            message, _, _ = get_message_meta(update)
             sticker = self.__replied_sticker(message, "remove")
             self.__delete_sticker_use_case(
                 DeleteStickerCommand(
                     user_id=caller_id(update),
-                    chat_id=chat.id,
-                    chat_type=chat.type,
                     reply_sticker_id=sticker.file_id,
                     tags=tuple(context.args),
                 )

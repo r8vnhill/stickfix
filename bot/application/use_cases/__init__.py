@@ -15,6 +15,7 @@ from .clear_inline_cache import ClearInlineCache
 from .delete_sticker import DeleteSticker
 from .delete_user import DeleteUser
 from .ensure_user import EnsureUser
+from .get_help import GetHelp
 from .get_stickers import GetStickers
 from .resolve_inline_query import ResolveInlineQuery
 from .set_mode import SetMode
@@ -27,6 +28,7 @@ __all__ = [
     "DeleteSticker",
     "EnsureUser",
     "GetStickers",
+    "GetHelp",
     "ResolveInlineQuery",
     "SetMode",
     "SetShuffle",

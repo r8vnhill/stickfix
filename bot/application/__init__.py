@@ -31,11 +31,12 @@ from .requests import (
     DeleteUserCommand,
     GetStickersQuery,
     InlineQueryRequest,
+    InteractionScope,
     SetModeCommand,
     SetShuffleCommand,
 )
 from .results import AcknowledgementResult, GetStickersResult, InlineQueryResult
-from .use_cases import ClearInlineCache
+from .use_cases import ClearInlineCache, GetHelp
 
 __all__ = [
     "AcknowledgementResult",
@@ -46,6 +47,8 @@ __all__ = [
     "DeleteStickerCommand",
     "DeleteUserCommand",
     "GetStickersQuery",
+    "GetHelp",
+    "InteractionScope",
     "GetStickersResult",
     "InlineQueryRequest",
     "InlineQueryResult",

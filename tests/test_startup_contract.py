@@ -42,7 +42,11 @@ def test_run_delegates_to_polling_only_startup(monkeypatch: pytest.MonkeyPatch) 
     for handler in ("HelperHandler", "UserHandler", "StickerHandler", "InlineHandler"):
         monkeypatch.setattr(f"bot.stickfix.{handler}", MagicMock(name=handler))
 
-    bot = Stickfix("dummy-token", users=MagicMock(name="UserRepository"))
+    bot = Stickfix(
+        "dummy-token",
+        users=MagicMock(name="UserRepository"),
+        public=MagicMock(name="PublicPackRepository"),
+    )
 
     # when the public entry point runs,
     bot.run()

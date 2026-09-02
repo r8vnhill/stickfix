@@ -3,30 +3,24 @@
 from __future__ import annotations
 
 from bot.application.errors import WrongInteractionContextError
-from bot.application.ports import PublicPackRepository, UserRepository
-from bot.application.requests import GetStickersQuery
+from bot.application.requests import GetStickersQuery, InteractionScope
 from bot.application.results import GetStickersResult
-from bot.domain.services import StickerPackService
-from bot.domain.user import UserModes
 
-from ._repositories import public_repository, resolve_effective_user
+from ._base import StickerPackUseCase
+from ._repositories import resolve_effective_user
 
 
-class GetStickers:
-    """Resolve sticker ids for a private-chat `/get` command."""
+class GetStickers(StickerPackUseCase):
+    """Resolve the sticker ids a private-chat ``/get <tags>`` should reply with.
 
-    def __init__(
-        self,
-        users: UserRepository,
-        public: PublicPackRepository | None = None,
-        stickers: StickerPackService | None = None,
-    ) -> None:
-        self._users = users
-        self._public = public_repository(users, public)
-        self._stickers = stickers or StickerPackService()
+    ``/get`` is private-chat only: a non-private ``interaction_scope`` raises
+    :class:`WrongInteractionContextError` and the handler turns that into a user
+    message. This use case never mutates state -- it only reads the effective
+    pack -- so, unlike the add/delete cases, it performs no save.
+    """
 
     def __call__(self, query: GetStickersQuery) -> GetStickersResult:
-        if query.chat_type != UserModes.PRIVATE:
+        if query.interaction_scope is not InteractionScope.PRIVATE:
             raise WrongInteractionContextError("The /get command only works in private chats.")
 
         public_pack = self._public.get()

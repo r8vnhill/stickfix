@@ -1,15 +1,15 @@
-"""Seam-level tests for the initial application package."""
+"""Seam-level tests for the explicit application contracts."""
 
 from __future__ import annotations
 
 import importlib
 import sys
-from dataclasses import is_dataclass
+from dataclasses import fields, is_dataclass
 
-from hamcrest import assert_that, equal_to, has_item, is_, is_not, none
+from hamcrest import assert_that, equal_to, has_item, is_, is_not
 
-from bot.database.storage import StickfixDB
-from bot.domain import SF_PUBLIC, StickfixUser
+from bot.application.ports import PublicPackRepository, UserRepository
+from tests.support.repositories import InMemoryPublicPackRepository, InMemoryUserRepository
 
 
 def test_application_modules_import_without_loading_telegram() -> None:
@@ -37,6 +37,7 @@ def test_request_and_result_types_are_dataclasses() -> None:
         requests.SetModeCommand,
         requests.SetShuffleCommand,
         requests.DeleteUserCommand,
+        requests.EnsureUserCommand,
         requests.InlineQueryRequest,
         requests.ClearInlineCacheCommand,
     ]
@@ -52,52 +53,23 @@ def test_request_and_result_types_are_dataclasses() -> None:
     assert_that(actual, equal_to([True] * len(actual)))
 
 
-def test_application_error_hierarchy_is_shallow_and_explicit() -> None:
-    errors = importlib.import_module("bot.application.errors")
-    assert_that(issubclass(errors.InvalidCommandInputError, errors.ApplicationError), is_(True))
-    assert_that(issubclass(errors.WrongInteractionContextError, errors.ApplicationError), is_(True))
-    assert_that(issubclass(errors.MissingStickerError, errors.ApplicationError), is_(True))
-    assert_that(issubclass(errors.MissingReplyStickerError, errors.ApplicationError), is_(True))
-    assert_that(issubclass(errors.UserNotFoundError, errors.ApplicationError), is_(True))
+def test_repository_ports_are_implemented_by_explicit_test_fakes() -> None:
+    assert_that(isinstance(InMemoryUserRepository(), UserRepository), is_(True))
+    assert_that(isinstance(InMemoryPublicPackRepository(), PublicPackRepository), is_(True))
 
 
-def test_repository_port_can_be_targeted_by_a_small_adapter_for_stickfixdb(tmp_path) -> None:
-    ports = importlib.import_module("bot.application.ports")
-    store = StickfixDB("users", data_dir=tmp_path)
+def test_sticker_requests_contain_only_application_data() -> None:
+    requests = importlib.import_module("bot.application.requests")
 
-    class StickfixDbRepositoryAdapter:
-        def __init__(self, wrapped: StickfixDB) -> None:
-            self._wrapped = wrapped
-
-        def get_user(self, user_id: str) -> StickfixUser | None:
-            return self._wrapped.get(user_id)
-
-        def has_user(self, user_id: str) -> bool:
-            return user_id in self._wrapped
-
-        def save_user(self, user: StickfixUser) -> None:
-            self._wrapped[str(user.id)] = user
-
-        def delete_user(self, user_id: str) -> bool:
-            if user_id not in self._wrapped:
-                return False
-            del self._wrapped[user_id]
-            return True
-
-        def get_public_pack(self) -> StickfixUser | None:
-            return self._wrapped.get(SF_PUBLIC)
-
-        def ensure_public_pack(self) -> StickfixUser:
-            public_user = self.get_public_pack()
-            if public_user is None:
-                public_user = StickfixUser(SF_PUBLIC)
-                self.save_user(public_user)
-            return public_user
-
-    adapter = StickfixDbRepositoryAdapter(store)
-
-    assert_that(isinstance(adapter, ports.UserRepository), is_(True))
-    assert_that(adapter.get_user("missing"), none())
-    assert_that(adapter.has_user("missing"), is_(False))
-    assert_that(adapter.get_public_pack(), none())
-    assert_that(adapter.ensure_public_pack().id, is_(SF_PUBLIC))
+    assert_that(
+        {field.name for field in fields(requests.AddStickerCommand)},
+        equal_to({"user_id", "reply_sticker_id", "reply_sticker_emoji", "tags"}),
+    )
+    assert_that(
+        {field.name for field in fields(requests.DeleteStickerCommand)},
+        equal_to({"user_id", "reply_sticker_id", "tags"}),
+    )
+    assert_that(
+        {field.name for field in fields(requests.ClearInlineCacheCommand)},
+        equal_to({"user_id"}),
+    )

@@ -1,79 +1,21 @@
-"""Shared repository helpers for the use-case layer.
+"""Repository helpers shared by the pack-oriented use cases.
 
-Two concerns live here so individual use cases stay short and consistent:
-
-* **Public-pack port bridging.** Production wiring passes a real
-  :class:`~bot.application.ports.PublicPackRepository` (``PostgresUserRepository``
-  implements it), but older tests still hand use cases a plain in-memory mapping or
-  a fake with ad-hoc ``get_public_pack``/``ensure_public_pack`` methods.
-  :func:`public_repository` normalises all of those into one ``PublicPackRepository``
-  shape, and :func:`save_effective_pack` / :func:`get_user` paper over the same
-  mapping-vs-repository split for reads and writes.
-* **User resolution.** :func:`resolve_effective_user` is the single implementation of
-  "load the addressed user, fall back to the public pack, otherwise raise" that the
-  sticker and inline-query use cases all need.
-
-Everything here is deliberately Telegram-free and imports only application ports,
-application errors, and the domain model.
+The use cases operate on an "effective pack" that is either the caller's own
+record or the shared ``SF-PUBLIC`` pack. These helpers centralise the two places
+that distinction matters -- persisting a mutated pack back to the right port, and
+resolving which pack a request targets -- so each use case stays a few lines long
+and they cannot drift apart. Everything here is Telegram-free and depends only on
+application ports, application errors, and the domain model.
 """
 
 from __future__ import annotations
 
-from typing import cast
-
 from bot.application.errors import UserNotFoundError
 from bot.application.ports import PublicPackRepository, UserRepository
+from bot.domain.identifiers import UserId
 from bot.domain.user import StickfixUser
 
 _NO_TARGET_MESSAGE = "No user or public sticker pack exists."
-
-
-class _LegacyPublicPackRepository:
-    """Bridge old in-memory fakes while production uses the dedicated port."""
-
-    def __init__(self, users: object) -> None:
-        self._users = users
-
-    def get(self) -> StickfixUser | None:
-        getter = getattr(self._users, "get_public_pack", None)
-        if getter is not None:
-            return cast(StickfixUser | None, getter())
-        values = getattr(self._users, "values", None)
-        if values is None:
-            values = self._users.users.values()  # type: ignore[attr-defined]
-        for value in values:
-            if getattr(value, "id", None) == "SF-PUBLIC":
-                return value
-        return None
-
-    def save(self, pack: StickfixUser) -> None:
-        saver = getattr(self._users, "save_user", None)
-        if saver is not None:
-            saver(pack)
-            return
-        self._users[pack.id] = pack  # type: ignore[index]
-
-    def ensure(self) -> StickfixUser:
-        ensurer = getattr(self._users, "ensure_public_pack", None)
-        if ensurer is not None:
-            return cast(StickfixUser, ensurer())
-        public = self.get()
-        if public is not None:
-            return public
-        public = StickfixUser("SF-PUBLIC")
-        self._users[public.id] = public  # type: ignore[index]
-        return public
-
-
-def public_repository(
-    users: UserRepository,
-    public: PublicPackRepository | None,
-) -> PublicPackRepository:
-    if public is not None:
-        return public
-    if isinstance(users, PublicPackRepository):
-        return users
-    return _LegacyPublicPackRepository(users)
 
 
 def save_effective_pack(
@@ -82,29 +24,26 @@ def save_effective_pack(
     pack: StickfixUser,
     public_pack: StickfixUser | None,
 ) -> None:
+    """Persist ``pack`` through the port that owns it.
+
+    Identity (``is``) against ``public_pack`` -- not id equality -- decides the
+    target, so a use case that loaded the public pack as its fallback writes back
+    to the public port while a real user's pack goes to the user port.
+    """
     if public_pack is not None and pack is public_pack:
         public.save(pack)
     else:
-        saver = getattr(users, "save_user", None)
-        if saver is not None:
-            saver(pack)
-        else:
-            users[pack.id] = pack  # type: ignore[index]
+        users.save_user(pack)
 
 
-def get_user(users: UserRepository, user_id: object) -> StickfixUser | None:
-    getter = getattr(users, "get_user", None)
-    if getter is not None:
-        return cast(StickfixUser | None, getter(user_id))
-    try:
-        return cast(StickfixUser | None, users.get(user_id) or users.get(str(user_id)))  # type: ignore[attr-defined]
-    except AttributeError:
-        return None
+def get_user(users: UserRepository, user_id: UserId) -> StickfixUser | None:
+    """Load one regular numeric user through the explicit user port."""
+    return users.get_user(user_id)
 
 
 def resolve_effective_user(
     users: UserRepository,
-    user_id: object | None,
+    user_id: UserId | None,
     public_pack: StickfixUser | None,
 ) -> StickfixUser:
     """Return the addressed user, else the public pack, else raise.

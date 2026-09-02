@@ -3,26 +3,21 @@
 from __future__ import annotations
 
 from bot.application.errors import MissingStickerError
-from bot.application.ports import PublicPackRepository, UserRepository
 from bot.application.requests import DeleteStickerCommand
 from bot.application.results import DeleteStickerResult
-from bot.domain.services import StickerPackService
 
-from ._repositories import public_repository, resolve_effective_user, save_effective_pack
+from ._base import StickerPackUseCase
+from ._repositories import resolve_effective_user, save_effective_pack
 
 
-class DeleteSticker:
-    """Remove a sticker from the public or private pack selected by user settings."""
+class DeleteSticker(StickerPackUseCase):
+    """Unlink a sticker (optionally only from given tags) from the effective pack.
 
-    def __init__(
-        self,
-        users: UserRepository,
-        public: PublicPackRepository | None = None,
-        stickers: StickerPackService | None = None,
-    ) -> None:
-        self._users = users
-        self._public = public_repository(users, public)
-        self._stickers = stickers or StickerPackService()
+    With no ``tags`` the sticker is removed entirely; with tags it is only
+    detached from those tags. The effective pack is always saved afterwards so a
+    no-op delete still round-trips cleanly. Raises :class:`MissingStickerError`
+    when the command carries no sticker id.
+    """
 
     def __call__(self, command: DeleteStickerCommand) -> DeleteStickerResult:
         if command.reply_sticker_id is None:
