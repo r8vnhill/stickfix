@@ -7,14 +7,8 @@ from hamcrest import assert_that, empty, equal_to
 from bot.application.errors import InvalidCommandInputError
 from bot.application.requests import SetModeCommand
 from bot.handlers.utility import UserHandler
-
-
-class FakeDispatcher:
-    def __init__(self) -> None:
-        self.handlers = []
-
-    def add_handler(self, handler) -> None:
-        self.handlers.append(handler)
+from bot.utils.messages import Commands
+from tests.handlers.support import FakeDispatcher, command_callback
 
 
 class FakeUseCase:
@@ -40,8 +34,10 @@ class FakeMessage:
         self.markdown_replies.append(text)
 
 
-def make_handler(use_case: FakeUseCase) -> UserHandler:
-    return UserHandler(FakeDispatcher(), use_case, FakeUseCase(), FakeUseCase())
+def make_handler(use_case: FakeUseCase) -> FakeDispatcher:
+    dispatcher = FakeDispatcher()
+    UserHandler(dispatcher, use_case, FakeUseCase(), FakeUseCase())
+    return dispatcher
 
 
 def make_update(message: FakeMessage):
@@ -52,9 +48,9 @@ def make_update(message: FakeMessage):
     )
 
 
-def call_set_mode(handler: UserHandler, update, args: list[str]) -> None:
+def call_set_mode(dispatcher: FakeDispatcher, update, args: list[str]) -> None:
     context = SimpleNamespace(args=args)
-    handler._UserHandler__set_mode(update, context)
+    command_callback(dispatcher, Commands.SET_MODE.value)(update, context)
 
 
 def test_set_mode_handler_sends_first_argument_to_use_case() -> None:

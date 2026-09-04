@@ -3,18 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from hamcrest import assert_that, equal_to
+from telegram.ext import CommandHandler
 
 from bot.application.requests import DeleteUserCommand, EnsureUserCommand, SetShuffleCommand
 from bot.application.results import AcknowledgementResult
-from bot.handlers.utility import HelperHandler, UserHandler, send_help_message
-
-
-class FakeDispatcher:
-    def __init__(self) -> None:
-        self.handlers = []
-
-    def add_handler(self, handler) -> None:
-        self.handlers.append(handler)
+from bot.handlers.utility import HelperHandler, UserHandler
+from bot.utils.messages import Commands
+from tests.handlers.support import FakeDispatcher, command_callback
 
 
 class FakeMessage:
@@ -66,10 +61,11 @@ class FakeGetHelp:
 
 def test_start_handler_sends_greeting_and_ensures_numeric_user() -> None:
     ensure = RecordingUseCase(AcknowledgementResult())
-    handler = HelperHandler(FakeDispatcher(), ensure, RecordingUseCase("help"))
+    dispatcher = FakeDispatcher()
+    HelperHandler(dispatcher, ensure, RecordingUseCase("help"))
     bot = FakeBot()
 
-    handler._HelperHandler__send_hello_message(make_update(), SimpleNamespace(bot=bot))
+    command_callback(dispatcher, Commands.START.value)(make_update(), SimpleNamespace(bot=bot))
 
     assert_that(ensure.commands, equal_to([EnsureUserCommand(123)]))
     assert_that(bot.sent_stickers, equal_to([(456, "CAADBAADTAADqAABTgXzVqN6dJUIXwI")]))
@@ -77,12 +73,13 @@ def test_start_handler_sends_greeting_and_ensures_numeric_user() -> None:
 
 def test_shuffle_handler_forwards_first_argument() -> None:
     shuffle = RecordingUseCase(AcknowledgementResult())
-    handler = UserHandler(
-        FakeDispatcher(), RecordingUseCase(), shuffle, RecordingUseCase(AcknowledgementResult())
-    )
+    dispatcher = FakeDispatcher()
+    UserHandler(dispatcher, RecordingUseCase(), shuffle, RecordingUseCase(AcknowledgementResult()))
     message = FakeMessage()
 
-    handler._UserHandler__set_shuffle(make_update(message), SimpleNamespace(args=["on", "ignored"]))
+    command_callback(dispatcher, Commands.SHUFFLE.value)(
+        make_update(message), SimpleNamespace(args=["on", "ignored"])
+    )
 
     assert_that(shuffle.commands, equal_to([SetShuffleCommand(123, "on")]))
     assert_that(message.text_replies, equal_to(["Done"]))
@@ -90,10 +87,11 @@ def test_shuffle_handler_forwards_first_argument() -> None:
 
 def test_delete_me_handler_replies_only_when_use_case_acknowledges() -> None:
     delete = RecordingUseCase(AcknowledgementResult(acknowledged=True))
-    handler = UserHandler(FakeDispatcher(), RecordingUseCase(), RecordingUseCase(), delete)
+    dispatcher = FakeDispatcher()
+    UserHandler(dispatcher, RecordingUseCase(), RecordingUseCase(), delete)
     message = FakeMessage()
 
-    handler._UserHandler__remove_user(make_update(message), SimpleNamespace())
+    command_callback(dispatcher, Commands.DELETE_ME.value)(make_update(message), SimpleNamespace())
 
     assert_that(delete.commands, equal_to([DeleteUserCommand(123)]))
     assert_that(message.text_replies, equal_to(["Sure!"]))
@@ -101,9 +99,10 @@ def test_delete_me_handler_replies_only_when_use_case_acknowledges() -> None:
 
 def test_help_adapter_sends_provider_content_without_file_io() -> None:
     bot = FakeBot()
-    update = make_update()
+    dispatcher = FakeDispatcher()
+    HelperHandler(dispatcher, RecordingUseCase(), FakeGetHelp("exact help"))
 
-    send_help_message(update, SimpleNamespace(bot=bot), FakeGetHelp("exact help"))
+    command_callback(dispatcher, Commands.HELP.value)(make_update(), SimpleNamespace(bot=bot))
 
     assert_that(
         bot.sent_messages,
@@ -114,6 +113,34 @@ def test_help_adapter_sends_provider_content_without_file_io() -> None:
                     "text": "exact help",
                     "parse_mode": "Markdown",
                 }
+            ]
+        ),
+    )
+
+
+def test_helper_handler_registers_start_then_help() -> None:
+    dispatcher = FakeDispatcher()
+
+    HelperHandler(dispatcher, RecordingUseCase(), FakeGetHelp("help"))
+
+    assert_that(
+        [handler.command for handler in dispatcher.handlers if isinstance(handler, CommandHandler)],
+        equal_to([[Commands.START.value], [Commands.HELP.value]]),
+    )
+
+
+def test_user_handler_registers_delete_me_set_mode_then_shuffle() -> None:
+    dispatcher = FakeDispatcher()
+
+    UserHandler(dispatcher, RecordingUseCase(), RecordingUseCase(), RecordingUseCase())
+
+    assert_that(
+        [handler.command for handler in dispatcher.handlers if isinstance(handler, CommandHandler)],
+        equal_to(
+            [
+                [Commands.DELETE_ME.value.lower()],
+                [Commands.SET_MODE.value.lower()],
+                [Commands.SHUFFLE.value],
             ]
         ),
     )

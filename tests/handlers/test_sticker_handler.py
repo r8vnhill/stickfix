@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from hamcrest import assert_that, equal_to
+from telegram.ext import CommandHandler
 
 from bot.application.errors import WrongInteractionContextError
 from bot.application.requests import (
@@ -13,14 +14,8 @@ from bot.application.requests import (
 )
 from bot.application.results import AddStickerResult, DeleteStickerResult, GetStickersResult
 from bot.handlers.stickers import StickerHandler
-
-
-class FakeDispatcher:
-    def __init__(self) -> None:
-        self.handlers = []
-
-    def add_handler(self, handler) -> None:
-        self.handlers.append(handler)
+from bot.utils.messages import Commands
+from tests.handlers.support import FakeDispatcher, command_callback
 
 
 class FakeMessage:
@@ -87,13 +82,15 @@ def make_handler(
     add_use_case: FakeAddSticker | None = None,
     get_use_case: FakeGetStickers | None = None,
     delete_use_case: FakeDeleteSticker | None = None,
-) -> StickerHandler:
-    return StickerHandler(
-        FakeDispatcher(),
+) -> FakeDispatcher:
+    dispatcher = FakeDispatcher()
+    StickerHandler(
+        dispatcher,
         add_use_case or FakeAddSticker(),
         get_use_case or FakeGetStickers(),
         delete_use_case or FakeDeleteSticker(),
     )
+    return dispatcher
 
 
 def make_update(message: FakeMessage, chat: FakeChat | None = None):
@@ -106,11 +103,13 @@ def make_update(message: FakeMessage, chat: FakeChat | None = None):
 
 def test_add_handler_builds_command_and_replies_ok() -> None:
     add_use_case = FakeAddSticker()
-    handler = make_handler(add_use_case=add_use_case)
+    dispatcher = make_handler(add_use_case=add_use_case)
     sticker = SimpleNamespace(file_id="sticker-1", emoji="smile")
     message = FakeMessage(reply_to_message=SimpleNamespace(sticker=sticker))
 
-    handler._StickerHandler__add_sticker(make_update(message), SimpleNamespace(args=["wave"]))
+    command_callback(dispatcher, Commands.ADD.value)(
+        make_update(message), SimpleNamespace(args=["wave"])
+    )
 
     assert_that(
         add_use_case.commands,
@@ -130,11 +129,11 @@ def test_add_handler_builds_command_and_replies_ok() -> None:
 
 def test_get_handler_builds_query_and_sends_returned_stickers() -> None:
     get_use_case = FakeGetStickers()
-    handler = make_handler(get_use_case=get_use_case)
+    dispatcher = make_handler(get_use_case=get_use_case)
     message = FakeMessage()
     chat = FakeChat()
 
-    handler._StickerHandler__get_stickers(
+    command_callback(dispatcher, Commands.GET.value)(
         make_update(message, chat),
         SimpleNamespace(args=["wave"]),
     )
@@ -156,11 +155,11 @@ def test_get_handler_builds_query_and_sends_returned_stickers() -> None:
 
 def test_get_handler_maps_wrong_context_to_existing_reply() -> None:
     get_use_case = FakeGetStickers(WrongInteractionContextError())
-    handler = make_handler(get_use_case=get_use_case)
+    dispatcher = make_handler(get_use_case=get_use_case)
     message = FakeMessage()
     chat = FakeChat(chat_type="group")
 
-    handler._StickerHandler__get_stickers(
+    command_callback(dispatcher, Commands.GET.value)(
         make_update(message, chat),
         SimpleNamespace(args=["wave"]),
     )
@@ -171,11 +170,13 @@ def test_get_handler_maps_wrong_context_to_existing_reply() -> None:
 
 def test_delete_handler_builds_command_and_stays_silent_on_success() -> None:
     delete_use_case = FakeDeleteSticker()
-    handler = make_handler(delete_use_case=delete_use_case)
+    dispatcher = make_handler(delete_use_case=delete_use_case)
     sticker = SimpleNamespace(file_id="sticker-1", emoji="smile")
     message = FakeMessage(reply_to_message=SimpleNamespace(sticker=sticker))
 
-    handler._StickerHandler__delete_from(make_update(message), SimpleNamespace(args=["wave"]))
+    command_callback(dispatcher, Commands.DELETE_FROM.value)(
+        make_update(message), SimpleNamespace(args=["wave"])
+    )
 
     assert_that(
         delete_use_case.commands,
@@ -191,3 +192,18 @@ def test_delete_handler_builds_command_and_stays_silent_on_success() -> None:
     )
     assert_that(message.text_replies, equal_to([]))
     assert_that(message.markdown_replies, equal_to([]))
+
+
+def test_sticker_handler_registers_commands_in_current_order() -> None:
+    dispatcher = make_handler()
+
+    assert_that(
+        [handler.command for handler in dispatcher.handlers if isinstance(handler, CommandHandler)],
+        equal_to(
+            [
+                [Commands.ADD.value],
+                [Commands.GET.value],
+                [Commands.DELETE_FROM.value.lower()],
+            ]
+        ),
+    )
