@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir uv==0.9.8
 
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
+COPY packages ./packages
 COPY bot ./bot
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic

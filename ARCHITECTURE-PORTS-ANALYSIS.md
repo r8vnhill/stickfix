@@ -15,8 +15,9 @@ migration CLI → legacy YAML records → migration PostgreSQL gateway
 
 ## Runtime boundaries
 
-- `bot.domain` contains Telegram-free sticker and user rules. It has no
-  persistence, YAML, SQLAlchemy, logging, or infrastructure dependencies.
+- `stickfix_domain` (`packages/stickfix-domain/`) contains Telegram-free sticker
+  and user rules. It has no persistence, YAML, SQLAlchemy, logging, or
+  infrastructure dependencies -- and no runtime dependencies at all.
 - `bot.application` contains request/result DTOs, errors, use cases, and
   narrow repository/content ports. It does not import concrete adapters.
 - `bot.handlers` translates Telegram updates and results. It receives use cases

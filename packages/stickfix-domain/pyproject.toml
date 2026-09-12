@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=66", "wheel>=0.40"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stickfix-domain"
+version = "0.1.0"
+description = "Stickfix's Telegram- and persistence-free domain model."
+requires-python = ">=3.14,<4"
+dependencies = []
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

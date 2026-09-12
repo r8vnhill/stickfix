@@ -14,23 +14,23 @@ from pathlib import Path
 
 HANDLER_TEST_ROOT = Path(__file__).parent
 PRIVATE_HANDLER_PREFIXES = (
-    "_HelperHandler__",
-    "_UserHandler__",
-    "_StickerHandler__",
-    "_InlineHandler__",
+  "_HelperHandler__",
+  "_UserHandler__",
+  "_StickerHandler__",
+  "_InlineHandler__",
 )
 
 
 def test_handler_tests_do_not_access_name_mangled_callbacks() -> None:
-    """Keep handler tests coupled to registered PTB callbacks, not implementations."""
-    guard_path = Path(__file__).resolve()
-    violations = [
-        f"{path}:{line_number}: {prefix}"
-        for path in HANDLER_TEST_ROOT.rglob("*.py")
-        if path.resolve() != guard_path
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-        for prefix in PRIVATE_HANDLER_PREFIXES
-        if prefix in line
-    ]
+  """Keep handler tests coupled to registered PTB callbacks, not implementations."""
+  guard_path = Path(__file__).resolve()
+  violations = [
+    f"{path}:{line_number}: {prefix}"
+    for path in HANDLER_TEST_ROOT.rglob("*.py")
+    if path.resolve() != guard_path
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+    for prefix in PRIVATE_HANDLER_PREFIXES
+    if prefix in line
+  ]
 
-    assert not violations, "private handler callback access found:\n" + "\n".join(violations)
+  assert not violations, "private handler callback access found:\n" + "\n".join(violations)

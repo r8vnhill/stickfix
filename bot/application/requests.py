@@ -19,98 +19,97 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-from bot.domain.identifiers import UserId
-from bot.domain.user import Switch, UserModes
+from stickfix_domain import Switch, UserId, UserModes
 
 
 class InteractionScope(str, Enum):
-    """Where a command was invoked, as far as application rules care.
+  """Where a command was invoked, as far as application rules care.
 
-    Handlers collapse Telegram's several chat types into just these two: a chat is
-    either a 1:1 private chat or it is not.
-    """
+  Handlers collapse Telegram's several chat types into just these two: a chat is
+  either a 1:1 private chat or it is not.
+  """
 
-    PRIVATE = "private"
-    NON_PRIVATE = "non_private"
+  PRIVATE = "private"
+  NON_PRIVATE = "non_private"
 
 
 @dataclass(frozen=True, slots=True)
 class AddStickerCommand:
-    """``/add``: link the replied-to sticker to ``tags`` (emoji used if empty)."""
+  """``/add``: link the replied-to sticker to ``tags`` (emoji used if empty)."""
 
-    user_id: UserId
-    reply_sticker_id: str | None
-    reply_sticker_emoji: str | None
-    tags: tuple[str, ...] = field(default_factory=tuple)
+  user_id: UserId
+  reply_sticker_id: str | None
+  reply_sticker_emoji: str | None
+  tags: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
 class GetStickersQuery:
-    """``/get``: fetch sticker ids for ``tags``; rejected outside private chats."""
+  """``/get``: fetch sticker ids for ``tags``; rejected outside private chats."""
 
-    user_id: UserId
-    interaction_scope: InteractionScope
-    tags: tuple[str, ...] = field(default_factory=tuple)
+  user_id: UserId
+  interaction_scope: InteractionScope
+  tags: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
 class DeleteStickerCommand:
-    """``/deleteFrom``: unlink a sticker fully, or only from ``tags`` when given."""
+  """``/deleteFrom``: unlink a sticker fully, or only from ``tags`` when given."""
 
-    user_id: UserId
-    reply_sticker_id: str | None
-    tags: tuple[str, ...] = field(default_factory=tuple)
+  user_id: UserId
+  reply_sticker_id: str | None
+  tags: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
 class SetModeCommand:
-    """``/setMode``: switch the caller between private and public packs.
+  """``/setMode``: switch the caller between private and public packs.
 
-    ``mode`` may arrive as a raw command argument; the use case validates it.
-    """
+  ``mode`` may arrive as a raw command argument; the use case validates it.
+  """
 
-    user_id: UserId
-    mode: UserModes | str
+  user_id: UserId
+  mode: UserModes | str
 
 
 @dataclass(frozen=True, slots=True)
 class SetShuffleCommand:
-    """``/shuffle``: toggle shuffled sticker ordering for the caller."""
+  """``/shuffle``: toggle shuffled sticker ordering for the caller."""
 
-    user_id: UserId
-    shuffle: Switch | str
+  user_id: UserId
+  shuffle: Switch | str
 
 
 @dataclass(frozen=True, slots=True)
 class DeleteUserCommand:
-    """``/deleteMe``: drop the caller's stored record and private pack."""
+  """``/deleteMe``: drop the caller's stored record and private pack."""
 
-    user_id: UserId
+  user_id: UserId
 
 
 @dataclass(frozen=True, slots=True)
 class EnsureUserCommand:
-    """``/start``: create the caller's record if it does not exist yet."""
+  """``/start``: create the caller's record if it does not exist yet."""
 
-    user_id: UserId
+  user_id: UserId
 
 
 @dataclass(frozen=True, slots=True)
 class InlineQueryRequest:
-    """One inline-query page; ``user_id`` is ``None`` for anonymous queries.
+  """One inline-query page; ``user_id`` is ``None`` for anonymous queries.
 
-    ``offset``/``limit`` page the results Telegram-style; an empty ``query_text``
-    at ``offset == 0`` also asks for the default help article.
-    """
+  ``offset``/``limit`` page the results Telegram-style; an empty ``query_text``
+  at ``offset == 0`` also asks for the default help article.
+  """
 
-    user_id: UserId | None
-    query_text: str
-    offset: int = 0
-    limit: int = 49
+  user_id: UserId | None
+  query_text: str
+  offset: int = 0
+  limit: int = 49
 
 
 @dataclass(frozen=True, slots=True)
 class ClearInlineCacheCommand:
-    """Invalidate the inline cache after the caller picks a chosen result."""
+  """Invalidate the inline cache after the caller picks a chosen result."""
 
-    user_id: UserId | None
+  user_id: UserId | None

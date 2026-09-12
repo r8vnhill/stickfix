@@ -5,8 +5,10 @@ environment. The sections below cover local setup, checks, optional extras, and 
 
 ## Local setup
 
-1. Install `uv` globally (`python -m pip install --user uv` or see [uv docs](https://docs.astral.sh/uv)).
-2. From the repo root run `uv sync --extra dev` so the lockfile and the virtual environment are aligned.
+1. Install `uv` globally (`python -m pip install --user uv`) or see
+   [uv docs](https://docs.astral.sh/uv).
+2. From the repo root run `uv sync` so the lockfile and the virtual environment are
+   aligned. The default `dev` dependency group supplies development tooling.
 3. When dependencies change run `uv lock`/`uv sync` and commit both `pyproject.toml` and `uv.lock`.
 
 ## Lint & tests
@@ -43,11 +45,11 @@ To work with Neo4j drivers:
 uv sync --extra graph
 ```
 
-### All extras including development tools
+### All published extras including development tools
 
 For comprehensive dependency graph including testing, type checking, and CI helpers:
 ```bash
-uv sync --extra dev
+uv sync --all-extras
 ```
 
 ## Dependency metadata workflow
@@ -66,7 +68,7 @@ This keeps the locked dependency graph reproducible for every contributor and CI
 CI jobs should replicate the local commands:
 
 ```
-uv sync --extra dev
+uv sync
 uv run ruff check
 uv run pytest
 ```

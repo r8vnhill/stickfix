@@ -21,97 +21,97 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    """Declarative base; ``Base.metadata`` is the Alembic ``target_metadata``."""
+  """Declarative base; ``Base.metadata`` is the Alembic ``target_metadata``."""
 
 
 class UserRow(Base):
-    """A regular user keyed by Telegram id; associations live in the join tables."""
+  """A regular user keyed by Telegram id; associations live in the join tables."""
 
-    __tablename__ = "users"
+  __tablename__ = "users"
 
-    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    private_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    shuffle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+  telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+  private_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+  shuffle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class StickerRow(Base):
-    __tablename__ = "stickers"
+  __tablename__ = "stickers"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
+  id: Mapped[str] = mapped_column(String, primary_key=True)
 
 
 class TagRow(Base):
-    __tablename__ = "tags"
+  __tablename__ = "tags"
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+  id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+  name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
 
 class UserStickerTagRow(Base):
-    __tablename__ = "user_sticker_tags"
-    __table_args__ = (Index("ix_user_sticker_tags_user_tag", "user_id", "tag_id"),)
+  __tablename__ = "user_sticker_tags"
+  __table_args__ = (Index("ix_user_sticker_tags_user_tag", "user_id", "tag_id"),)
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("users.telegram_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    sticker_id: Mapped[str] = mapped_column(
-        String,
-        ForeignKey("stickers.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tags.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  user_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("users.telegram_id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  sticker_id: Mapped[str] = mapped_column(
+    String,
+    ForeignKey("stickers.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  tag_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("tags.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class PublicStickerTagRow(Base):
-    __tablename__ = "public_sticker_tags"
-    __table_args__ = (Index("ix_public_sticker_tags_tag", "tag_id"),)
+  __tablename__ = "public_sticker_tags"
+  __table_args__ = (Index("ix_public_sticker_tags_tag", "tag_id"),)
 
-    sticker_id: Mapped[str] = mapped_column(
-        String,
-        ForeignKey("stickers.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tags.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  sticker_id: Mapped[str] = mapped_column(
+    String,
+    ForeignKey("stickers.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  tag_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("tags.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class UserCachedStickerRow(Base):
-    __tablename__ = "user_cached_stickers"
-    __table_args__ = (Index("ix_user_cached_stickers_user_tag", "user_id", "tag_id"),)
+  __tablename__ = "user_cached_stickers"
+  __table_args__ = (Index("ix_user_cached_stickers_user_tag", "user_id", "tag_id"),)
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("users.telegram_id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tags.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    sticker_id: Mapped[str] = mapped_column(String, primary_key=True)
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  user_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("users.telegram_id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  tag_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("tags.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  sticker_id: Mapped[str] = mapped_column(String, primary_key=True)
+  position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class PublicCachedStickerRow(Base):
-    __tablename__ = "public_cached_stickers"
-    __table_args__ = (Index("ix_public_cached_stickers_tag", "tag_id"),)
+  __tablename__ = "public_cached_stickers"
+  __table_args__ = (Index("ix_public_cached_stickers_tag", "tag_id"),)
 
-    tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tags.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    sticker_id: Mapped[str] = mapped_column(String, primary_key=True)
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  tag_id: Mapped[int] = mapped_column(
+    BigInteger,
+    ForeignKey("tags.id", ondelete="CASCADE"),
+    primary_key=True,
+  )
+  sticker_id: Mapped[str] = mapped_column(String, primary_key=True)
+  position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

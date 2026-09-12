@@ -12,85 +12,82 @@ from tests.handlers.support import FakeDispatcher, command_callback
 
 
 class FakeUseCase:
-    def __init__(self, error: Exception | None = None) -> None:
-        self.error = error
-        self.commands: list[SetModeCommand] = []
+  def __init__(self, error: Exception | None = None) -> None:
+    self.error = error
+    self.commands: list[SetModeCommand] = []
 
-    def __call__(self, command: SetModeCommand) -> None:
-        self.commands.append(command)
-        if self.error is not None:
-            raise self.error
+  def __call__(self, command: SetModeCommand) -> None:
+    self.commands.append(command)
+    if self.error is not None:
+      raise self.error
 
 
 class FakeMessage:
-    def __init__(self) -> None:
-        self.text_replies: list[str] = []
-        self.markdown_replies: list[str] = []
+  def __init__(self) -> None:
+    self.text_replies: list[str] = []
+    self.markdown_replies: list[str] = []
 
-    def reply_text(self, text: str) -> None:
-        self.text_replies.append(text)
+  def reply_text(self, text: str) -> None:
+    self.text_replies.append(text)
 
-    def reply_markdown(self, text: str) -> None:
-        self.markdown_replies.append(text)
+  def reply_markdown(self, text: str) -> None:
+    self.markdown_replies.append(text)
 
 
 def make_handler(use_case: FakeUseCase) -> FakeDispatcher:
-    dispatcher = FakeDispatcher()
-    UserHandler(dispatcher, use_case, FakeUseCase(), FakeUseCase())
-    return dispatcher
+  dispatcher = FakeDispatcher()
+  UserHandler(dispatcher, use_case, FakeUseCase(), FakeUseCase())
+  return dispatcher
 
 
 def make_update(message: FakeMessage):
-    return SimpleNamespace(
-        effective_message=message,
-        effective_user=SimpleNamespace(id=123, username="alice"),
-        effective_chat=SimpleNamespace(id=456),
-    )
+  return SimpleNamespace(
+    effective_message=message,
+    effective_user=SimpleNamespace(id=123, username="alice"),
+    effective_chat=SimpleNamespace(id=456),
+  )
 
 
 def call_set_mode(dispatcher: FakeDispatcher, update, args: list[str]) -> None:
-    context = SimpleNamespace(args=args)
-    command_callback(dispatcher, Commands.SET_MODE.value)(update, context)
+  context = SimpleNamespace(args=args)
+  command_callback(dispatcher, Commands.SET_MODE.value)(update, context)
 
 
 def test_set_mode_handler_sends_first_argument_to_use_case() -> None:
-    use_case = FakeUseCase()
-    handler = make_handler(use_case)
-    message = FakeMessage()
+  use_case = FakeUseCase()
+  handler = make_handler(use_case)
+  message = FakeMessage()
 
-    call_set_mode(handler, make_update(message), ["private", "ignored"])
+  call_set_mode(handler, make_update(message), ["private", "ignored"])
 
-    assert_that(use_case.commands, equal_to([SetModeCommand(user_id=123, mode="private")]))
-    assert_that(message.text_replies, equal_to(["Leave it to me!"]))
-    assert_that(message.markdown_replies, empty())
+  assert_that(use_case.commands, equal_to([SetModeCommand(user_id=123, mode="private")]))
+  assert_that(message.text_replies, equal_to(["Leave it to me!"]))
+  assert_that(message.markdown_replies, empty())
 
 
 def test_set_mode_handler_maps_invalid_input_to_existing_markdown_reply() -> None:
-    use_case = FakeUseCase(InvalidCommandInputError())
-    handler = make_handler(use_case)
-    message = FakeMessage()
+  use_case = FakeUseCase(InvalidCommandInputError())
+  handler = make_handler(use_case)
+  message = FakeMessage()
 
-    call_set_mode(handler, make_update(message), ["invalid"])
+  call_set_mode(handler, make_update(message), ["invalid"])
 
-    assert_that(message.text_replies, empty())
-    assert_that(
-        message.markdown_replies,
-        equal_to(
-            [
-                "Sorry, I didn't understand. This command syntax is `/setMode private` "
-                "or `setMode public`."
-            ]
-        ),
-    )
+  assert_that(message.text_replies, empty())
+  assert_that(
+    message.markdown_replies,
+    equal_to(
+      ["Sorry, I didn't understand. This command syntax is `/setMode private` or `setMode public`."]
+    ),
+  )
 
 
 def test_set_mode_handler_keeps_missing_argument_noop() -> None:
-    use_case = FakeUseCase()
-    handler = make_handler(use_case)
-    message = FakeMessage()
+  use_case = FakeUseCase()
+  handler = make_handler(use_case)
+  message = FakeMessage()
 
-    call_set_mode(handler, make_update(message), [])
+  call_set_mode(handler, make_update(message), [])
 
-    assert_that(use_case.commands, empty())
-    assert_that(message.text_replies, empty())
-    assert_that(message.markdown_replies, empty())
+  assert_that(use_case.commands, empty())
+  assert_that(message.text_replies, empty())
+  assert_that(message.markdown_replies, empty())

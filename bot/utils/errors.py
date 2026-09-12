@@ -10,50 +10,50 @@ import logging
 
 
 class StickfixException(Exception):
-    """
-    Base class for exceptions in this module
+  """
+  Base class for exceptions in this module
 
-    Attributes:
-        err_message -- message sent by the error.
-        err_cause -- reason that caused the exception.
-    """
+  Attributes:
+      err_message -- message sent by the error.
+      err_cause -- reason that caused the exception.
+  """
 
-    def __init__(self, err_message="", err_cause=None):
-        self.message = err_message
-        self.cause = err_cause if err_cause is not None else "UNKNOWN."
+  def __init__(self, err_message="", err_cause=None):
+    self.message = err_message
+    self.cause = err_cause if err_cause is not None else "UNKNOWN."
 
 
 class InputException(StickfixException):
-    """
-    Exception raised when the arguments passed as input to the bot are incorrect.
-    """
+  """
+  Exception raised when the arguments passed as input to the bot are incorrect.
+  """
 
 
 class NoStickerException(StickfixException):
-    """
-    Exception raised when the bot can't find a sticker in a message.
-    """
+  """
+  Exception raised when the bot can't find a sticker in a message.
+  """
 
 
 class WrongContextException(StickfixException):
-    """
-    Exception raised when the bot tries to execute a command from the wrong context.
-    For example, this exception should be raised if a command can only be called from a private
-    chat and is being
-    called from a group chat.
-    """
+  """
+  Exception raised when the bot tries to execute a command from the wrong context.
+  For example, this exception should be raised if a command can only be called from a private
+  chat and is being
+  called from a group chat.
+  """
 
 
 class InsufficientPermissionsException(StickfixException):
-    """
-    Exception raised when a user tries to call a command without the appropriate permissions.
-    """
+  """
+  Exception raised when a user tries to call a command without the appropriate permissions.
+  """
 
 
 class DatabaseException(StickfixException):
-    """
-    Exception raised when a database operation fails.
-    """
+  """
+  Exception raised when a database operation fails.
+  """
 
 
 # Keep the historical misspelling importable for callers outside the bot.
@@ -62,7 +62,7 @@ Databasexception = DatabaseException
 
 
 def unexpected_error(e: Exception, a_logger: logging.Logger):
-    """Logs an unhandled exception."""
-    a_logger.critical("Unexpected error")
-    a_logger.critical(str(type(e)))
-    a_logger.critical(str(e.args))
+  """Logs an unhandled exception."""
+  a_logger.critical("Unexpected error")
+  a_logger.critical(str(type(e)))
+  a_logger.critical(str(e.args))

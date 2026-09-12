@@ -7,9 +7,9 @@ from typing import BinaryIO
 
 
 def what(
-    file: str | bytes | os.PathLike[str] | BinaryIO | None = None,
-    h: bytes | None = None,
+  file: str | bytes | os.PathLike[str] | BinaryIO | None = None,
+  h: bytes | None = None,
 ) -> None:
-    """Stub imghdr.what replacement for Python 3.14 where imghdr is removed."""
-    del file, h
-    return None
+  """Stub imghdr.what replacement for Python 3.14 where imghdr is removed."""
+  del file, h
+  return None

@@ -14,50 +14,49 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from bot.domain.identifiers import UserId
-from bot.domain.user import StickfixUser
+from stickfix_domain import StickfixUser, UserId
 
 
 @runtime_checkable
 class UserRepository(Protocol):
-    """Contract for reading and mutating regular Stickfix users."""
+  """Contract for reading and mutating regular Stickfix users."""
 
-    def get_user(self, user_id: UserId) -> StickfixUser | None:
-        """Return one user by id, or `None` when absent.
+  def get_user(self, user_id: UserId) -> StickfixUser | None:
+    """Return one user by id, or `None` when absent.
 
-        Args:
-            user_id: Numeric Telegram user ID.
+    Args:
+        user_id: Numeric Telegram user ID.
 
-        Returns:
-            The user/pack if found, otherwise None.
-        """
+    Returns:
+        The user/pack if found, otherwise None.
+    """
 
-    def has_user(self, user_id: UserId) -> bool:
-        """Return whether a user exists.
+  def has_user(self, user_id: UserId) -> bool:
+    """Return whether a user exists.
 
-        Args:
-            user_id: Numeric Telegram user ID.
+    Args:
+        user_id: Numeric Telegram user ID.
 
-        Returns:
-            True if the user/pack is stored, False otherwise.
-        """
+    Returns:
+        True if the user/pack is stored, False otherwise.
+    """
 
-    def save_user(self, user: StickfixUser) -> None:
-        """Persist one user in the repository.
+  def save_user(self, user: StickfixUser) -> None:
+    """Persist one user in the repository.
 
-        Updates an existing user or inserts a new one. All mutations (sticker packs,
-        mode, cache state) are saved immediately.
+    Updates an existing user or inserts a new one. All mutations (sticker packs,
+    mode, cache state) are saved immediately.
 
-        Args:
-            user: The user to save. Must have a valid user_id.
-        """
+    Args:
+        user: The user to save. Must have a valid user_id.
+    """
 
-    def delete_user(self, user_id: UserId) -> bool:
-        """Delete one user, returning whether a user was removed.
+  def delete_user(self, user_id: UserId) -> bool:
+    """Delete one user, returning whether a user was removed.
 
-        Args:
-            user_id: Numeric Telegram user ID to delete.
+    Args:
+        user_id: Numeric Telegram user ID to delete.
 
-        Returns:
-            True if a user was deleted, False if the user did not exist.
-        """
+    Returns:
+        True if a user was deleted, False if the user did not exist.
+    """

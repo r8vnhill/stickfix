@@ -7,34 +7,34 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True, slots=True)
 class AcknowledgementResult:
-    acknowledged: bool = True
-    detail: str | None = None
+  acknowledged: bool = True
+  detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class AddStickerResult:
-    sticker_id: str
-    effective_tags: tuple[str, ...] = field(default_factory=tuple)
-    changed: bool = False
+  sticker_id: str
+  effective_tags: tuple[str, ...] = field(default_factory=tuple)
+  changed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class DeleteStickerResult:
-    sticker_id: str
-    effective_tags: tuple[str, ...] = field(default_factory=tuple)
-    changed: bool = False
+  sticker_id: str
+  effective_tags: tuple[str, ...] = field(default_factory=tuple)
+  changed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class GetStickersResult:
-    sticker_ids: tuple[str, ...] = field(default_factory=tuple)
+  sticker_ids: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
 class InlineQueryResult:
-    sticker_ids: tuple[str, ...] = field(default_factory=tuple)
-    default_tags: tuple[str, ...] = field(default_factory=tuple)
-    show_default_help: bool = False
-    help_text: str | None = None
-    next_offset: int = 0
-    cache_cleared: bool = False
+  sticker_ids: tuple[str, ...] = field(default_factory=tuple)
+  default_tags: tuple[str, ...] = field(default_factory=tuple)
+  show_default_help: bool = False
+  help_text: str | None = None
+  next_offset: int = 0
+  cache_cleared: bool = False

@@ -15,10 +15,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.9.8"
-      - run: uv sync --extra dev --frozen
+      - run: uv sync --locked
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
+      - run: uv build --package stickfix-domain
+      - run: uv build --package stickfix-bot
 
   postgres-contract:
     runs-on: ubuntu-latest
@@ -44,7 +46,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.9.8"
-      - run: uv sync --extra dev --frozen
+      - run: uv sync --locked
       - run: uv run alembic upgrade head
         env:
           STICKFIX_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix

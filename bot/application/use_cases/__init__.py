@@ -22,14 +22,14 @@ from .set_mode import SetMode
 from .set_shuffle import SetShuffle
 
 __all__ = [
-    "AddSticker",
-    "ClearInlineCache",
-    "DeleteUser",
-    "DeleteSticker",
-    "EnsureUser",
-    "GetStickers",
-    "GetHelp",
-    "ResolveInlineQuery",
-    "SetMode",
-    "SetShuffle",
+  "AddSticker",
+  "ClearInlineCache",
+  "DeleteUser",
+  "DeleteSticker",
+  "EnsureUser",
+  "GetStickers",
+  "GetHelp",
+  "ResolveInlineQuery",
+  "SetMode",
+  "SetShuffle",
 ]

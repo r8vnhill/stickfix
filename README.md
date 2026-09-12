@@ -2,7 +2,8 @@
 
 ![BSD 2-Clause License](https://img.shields.io/badge/license-BSD%202--Clause-blue)
 
-This work is licensed under the [BSD 2-Clause "Simplified" License](https://opensource.org/licenses/BSD-2-Clause).
+This work is licensed under the
+[BSD 2-Clause "Simplified" License](https://opensource.org/licenses/BSD-2-Clause).
 
 **StickfixBot** is a Telegram bot that lets you tag, store, and retrieve stickers more easily.
 You can find it at https://t.me/stickfixbot or on Telegram as `@stickfixbot`.
@@ -51,7 +52,8 @@ before the bot starts; application mutations are committed immediately.
 
 ### Prerequisites
 
-**Python 3.14 or newer** — Verify with `python --version` or install via [python.org](https://www.python.org/).
+**Python 3.14 or newer** — Verify with `python --version` or install via
+[python.org](https://www.python.org/).
 
 **uv** — Install globally: `python -m pip install --user uv` or follow
 [uv installation docs](https://docs.astral.sh/uv).
@@ -113,15 +115,15 @@ Domain and application code never import Telegram or SQLAlchemy.
 - **Application** (`bot.application`) — `requests` (input DTOs), `results` (output
   DTOs), `errors` (Telegram-free failures), `use_cases` (one callable class per
   command), `ports` (outbound `Protocol`s).
-- **Domain** (`bot.domain`) — `StickfixUser` and `StickerPackService` hold the
-  sticker/tag rules, pack selection, shuffle, and cache. `UserId` is a
-  `NewType("UserId", int)`.
+- **Domain** (`stickfix_domain`, in `packages/stickfix-domain/`) — `StickfixUser`
+  and `StickerPackService` hold sticker/tag rules, pack selection, shuffle, and
+  cache behavior. `UserId` is a `NewType("UserId", int)`.
 - **Infrastructure** (`bot.infrastructure`) — adapters implementing the ports:
   `persistence.postgres` (runtime), `help` (file provider), and `migration` (the
   one-shot legacy YAML importer, never loaded at runtime).
-- Operational logging is configured in `bot.infrastructure.logging`; domain and
-  application modules use Python's standard `logging` API without constructing
-  file or console handlers.
+- Operational logging is configured in `bot.infrastructure.logging`; application
+  modules use Python's standard `logging` API without constructing file or
+  console handlers. The `stickfix_domain` package never imports `logging`.
 
 Persistence model:
 

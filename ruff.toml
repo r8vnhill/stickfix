@@ -1,4 +1,5 @@
 line-length = 100
+indent-width = 2
 target-version = "py38"
 
 [lint]
@@ -8,3 +9,4 @@ ignore = ["F403", "F401"]
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/**/*.py" = ["S101", "S105", "S106"]
+"packages/*/tests/**/*.py" = ["S101", "S105", "S106"]

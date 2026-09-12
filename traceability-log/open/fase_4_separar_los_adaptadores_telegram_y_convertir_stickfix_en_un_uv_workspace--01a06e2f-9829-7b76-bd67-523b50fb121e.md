@@ -111,7 +111,7 @@ First. This is the behavioral safety boundary for every subsequent package move.
 
 ---
 
-# Phase 4.2 — Establish the `uv` workspace foundation
+# Phase 4.2 — Establish the `uv` workspace foundation [DONE]
 
 ## Goal
 
@@ -173,7 +173,7 @@ After Phase 4.1. This creates the infrastructure required by every package extra
 
 ---
 
-# Phase 4.3 — Extract `stickfix-domain`
+# Phase 4.3 — Extract `stickfix-domain` [DONE]
 
 ## Goal
 
