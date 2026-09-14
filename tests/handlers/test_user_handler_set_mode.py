@@ -3,12 +3,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from hamcrest import assert_that, empty, equal_to
+from stickfix_application.errors import InvalidCommandInputError
+from stickfix_application.requests import SetModeCommand
 
-from bot.application.errors import InvalidCommandInputError
-from bot.application.requests import SetModeCommand
 from bot.handlers.utility import UserHandler
 from bot.utils.messages import Commands
 from tests.handlers.support import FakeDispatcher, command_callback
+
+_INVALID_MODE_PREFIX = "Sorry, I didn't understand. This command syntax is "
+_INVALID_MODE_SYNTAX = "`/setMode private` or `setMode public`."
+_INVALID_MODE_MESSAGE = _INVALID_MODE_PREFIX + _INVALID_MODE_SYNTAX
 
 
 class FakeUseCase:
@@ -75,9 +79,7 @@ def test_set_mode_handler_maps_invalid_input_to_existing_markdown_reply() -> Non
   assert_that(message.text_replies, empty())
   assert_that(
     message.markdown_replies,
-    equal_to(
-      ["Sorry, I didn't understand. This command syntax is `/setMode private` or `setMode public`."]
-    ),
+    equal_to([_INVALID_MODE_MESSAGE]),
   )
 
 

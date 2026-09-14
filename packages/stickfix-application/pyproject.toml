@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=66", "wheel>=0.40"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stickfix-application"
+version = "0.1.0"
+description = "Stickfix's Telegram- and persistence-free application layer."
+readme = "README.md"
+requires-python = ">=3.14,<4"
+dependencies = [
+  "stickfix-domain",
+]
+
+[tool.uv.sources]
+stickfix-domain = { workspace = true }
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

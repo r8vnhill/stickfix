@@ -20,6 +20,7 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run pytest
       - run: uv build --package stickfix-domain
+      - run: uv build --package stickfix-application
       - run: uv build --package stickfix-bot
 
   postgres-contract:
@@ -49,10 +50,13 @@ jobs:
       - run: uv sync --locked
       - run: uv run alembic upgrade head
         env:
-          STICKFIX_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+          STICKFIX_DATABASE_URL: >-
+            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
       - run: uv run alembic check
         env:
-          STICKFIX_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+          STICKFIX_DATABASE_URL: >-
+            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
       - run: uv run pytest -m integration
         env:
-          STICKFIX_TEST_DATABASE_URL: postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+          STICKFIX_TEST_DATABASE_URL: >-
+            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix

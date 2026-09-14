@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bot.application.ports import HelpContentProvider
+from stickfix_application.ports import HelpContentProvider
 
 
 class FileHelpContentProvider(HelpContentProvider):

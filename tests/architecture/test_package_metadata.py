@@ -1,8 +1,8 @@
 """Contracts for workspace metadata and published dependency surfaces.
 
 These tests inspect TOML and built wheel metadata rather than implementation
-details. They protect the root runtime package and the extracted domain package
-from silently acquiring the wrong dependencies or importable modules.
+details. They protect the root runtime package and extracted domain/application
+packages from silently acquiring the wrong dependencies or importable modules.
 """
 
 from __future__ import annotations
@@ -48,9 +48,19 @@ def project_metadata() -> dict[str, object]:
   return load_pyproject(ROOT / "pyproject.toml")
 
 
+def workspace_member_metadata(distribution_directory: str) -> dict[str, object]:
+  """Return a workspace member's parsed metadata by its ``packages/`` directory name."""
+  return load_pyproject(ROOT / "packages" / distribution_directory / "pyproject.toml")
+
+
 def domain_metadata() -> dict[str, object]:
   """Return the ``stickfix-domain`` workspace member's parsed metadata."""
-  return load_pyproject(ROOT / "packages" / "stickfix-domain" / "pyproject.toml")
+  return workspace_member_metadata("stickfix-domain")
+
+
+def application_metadata() -> dict[str, object]:
+  """Return the ``stickfix-application`` workspace member's parsed metadata."""
+  return workspace_member_metadata("stickfix-application")
 
 
 def named_dependencies(requirements: list[str]) -> set[str]:
@@ -59,7 +69,7 @@ def named_dependencies(requirements: list[str]) -> set[str]:
 
 
 def test_root_project_workspace_contract() -> None:
-  """The current root package reserves the future workspace member location."""
+  """The root package declares the workspace layout used by package builds."""
   metadata = project_metadata()
   project = metadata["project"]
   tool = metadata["tool"]
@@ -96,6 +106,18 @@ def test_domain_package_has_no_runtime_dependencies() -> None:
   assert not named_dependencies(domain.get("dependencies", []))
 
 
+def test_application_package_depends_only_on_stickfix_domain() -> None:
+  """``stickfix-application`` is a workspace member whose only dependency is the domain."""
+  root = project_metadata()["project"]
+  application = application_metadata()["project"]
+
+  assert application["name"] == "stickfix-application"
+  assert application["version"] == root["version"]
+  assert application["requires-python"] == root["requires-python"]
+  assert application_metadata()["build-system"]["build-backend"] == "setuptools.build_meta"
+  assert named_dependencies(application["dependencies"]) == {"stickfix-domain"}
+
+
 def test_root_package_declares_stickfix_domain_as_a_workspace_dependency() -> None:
   """The root distribution depends on ``stickfix-domain`` via the workspace source."""
   metadata = project_metadata()
@@ -104,6 +126,16 @@ def test_root_package_declares_stickfix_domain_as_a_workspace_dependency() -> No
 
   assert "stickfix-domain" in named_dependencies(project["dependencies"])
   assert sources["stickfix-domain"] == {"workspace": True}
+
+
+def test_root_package_declares_stickfix_application_as_a_workspace_dependency() -> None:
+  """The root distribution depends on ``stickfix-application`` via the workspace source."""
+  metadata = project_metadata()
+  project = metadata["project"]
+  sources = metadata["tool"]["uv"]["sources"]
+
+  assert "stickfix-application" in named_dependencies(project["dependencies"])
+  assert sources["stickfix-application"] == {"workspace": True}
 
 
 @pytest.mark.parametrize("extra", ["db", "graph"])
@@ -168,14 +200,34 @@ def test_built_domain_wheel_contains_only_the_stickfix_domain_package(tmp_path: 
   assert not wheel_metadata.get_all("Requires-Dist")
 
 
-def _install_wheel_in_venv(venv_dir: Path, wheel: Path) -> Path:
-  """Install ``wheel`` into an isolated environment and return its interpreter."""
+def test_built_application_wheel_contains_only_the_stickfix_application_package(
+  tmp_path: Path,
+) -> None:
+  """The application wheel packages ``stickfix_application`` and no legacy ``bot`` package."""
+  wheel = _build_wheel(
+    tmp_path,
+    "--package",
+    "stickfix-application",
+    pattern="stickfix_application-*.whl",
+  )
+  names, wheel_metadata = _wheel_metadata(wheel)
+
+  assert any(name.startswith("stickfix_application/") for name in names)
+  assert not any(name.split("/", 1)[0] == "bot" for name in names)
+  published_requirements = {
+    dependency_name(requirement) for requirement in wheel_metadata.get_all("Requires-Dist", [])
+  }
+  assert published_requirements == {"stickfix-domain"}
+
+
+def _install_wheels_in_venv(venv_dir: Path, wheels: list[Path]) -> Path:
+  """Install ``wheels`` into an isolated environment and return its interpreter."""
   uv = _uv_executable()
   subprocess.run(  # noqa: S603 -- the executable is discovered locally for the contract.
     [uv, "venv", str(venv_dir)], check=True, capture_output=True, text=True
   )
-  subprocess.run(  # noqa: S603 -- the wheel path is created by this test.
-    [uv, "pip", "install", "--python", str(venv_dir), str(wheel)],
+  subprocess.run(  # noqa: S603 -- the wheel paths are created by this test.
+    [uv, "pip", "install", "--python", str(venv_dir), *(str(wheel) for wheel in wheels)],
     check=True,
     capture_output=True,
     text=True,
@@ -183,6 +235,11 @@ def _install_wheel_in_venv(venv_dir: Path, wheel: Path) -> Path:
   bin_dir = "Scripts" if os.name == "nt" else "bin"
   python_name = "python.exe" if os.name == "nt" else "python"
   return venv_dir / bin_dir / python_name
+
+
+def _install_wheel_in_venv(venv_dir: Path, wheel: Path) -> Path:
+  """Install one ``wheel`` into an isolated environment and return its interpreter."""
+  return _install_wheels_in_venv(venv_dir, [wheel])
 
 
 def test_domain_wheel_imports_in_isolation(tmp_path: Path) -> None:
@@ -205,3 +262,50 @@ def test_domain_wheel_imports_in_isolation(tmp_path: Path) -> None:
   )
 
   assert result.returncode == 0, result.stderr
+
+
+def test_domain_and_application_wheels_import_together_in_isolation(tmp_path: Path) -> None:
+  """The locally built domain and application wheels install and import without the workspace."""
+  python = _build_isolated_application_interpreter(tmp_path)
+  result = _run_application_import_probe(python, tmp_path)
+
+  assert result.returncode == 0, result.stderr
+  assert result.stdout.strip() == ""
+
+
+def _build_isolated_application_interpreter(tmp_path: Path) -> Path:
+  """Build both workspace wheels and install them into a temporary environment."""
+  dist_dir = tmp_path / "dist"
+  wheels = [
+    _build_wheel(dist_dir, "--package", "stickfix-domain", pattern="stickfix_domain-*.whl"),
+    _build_wheel(
+      dist_dir,
+      "--package",
+      "stickfix-application",
+      pattern="stickfix_application-*.whl",
+    ),
+  ]
+  return _install_wheels_in_venv(tmp_path / "venv", wheels)
+
+
+def _run_application_import_probe(python: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+  """Import the application wheel and report forbidden modules loaded as a side effect."""
+  script = (
+    "import sys\n"
+    "import stickfix_application\n"
+    "import stickfix_application.errors\n"
+    "import stickfix_application.requests\n"
+    "import stickfix_application.results\n"
+    "import stickfix_application.ports\n"
+    "import stickfix_application.use_cases\n"
+    "assert stickfix_application.use_cases.AddSticker is not None\n"
+    "forbidden = ('telegram', 'sqlalchemy', 'psycopg', 'bot')\n"
+    "loaded = sorted(name for name in forbidden if name in sys.modules)\n"
+    "print(','.join(loaded))\n"
+  )
+  return subprocess.run(  # noqa: S603 -- the interpreter is created by this test.
+    [str(python), "-c", script],
+    cwd=cwd,
+    capture_output=True,
+    text=True,
+  )

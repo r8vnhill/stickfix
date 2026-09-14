@@ -15,8 +15,8 @@
   `secret.yml` are intentionally gitignored and must not be committed.
 - The codebase is moving toward a layered architecture:
   - `bot/handlers/` contains Telegram adapters.
-  - `bot/application/` contains transport-agnostic request/result DTOs, errors,
-    ports, and use cases.
+  - `packages/stickfix-application/` contains transport-agnostic request/result DTOs, errors,
+    ports, and use cases in the `stickfix_application` package.
   - `packages/stickfix-domain/` contains Telegram-free user/sticker rules in the
     `stickfix_domain` package.
   - `bot/infrastructure/persistence/` contains PostgreSQL runtime persistence adapters.
@@ -40,12 +40,13 @@
 ## Codebase Conventions
 
 - Keep application modules free of Telegram imports.
-  `tests/application/test_application_seam.py` verifies this boundary.
+  `packages/stickfix-application/tests/test_application_seam.py` verifies this boundary.
 - Preserve existing command names, reply wording, and historical YAML migration wire
   format unless the maintainer explicitly chooses otherwise.
 - Prefer explicit dataclasses and typed application errors over dicts, tuples, or
   Telegram-coupled control flow.
-- Prefer narrow Protocol-based ports, such as `bot/application/ports/user_repository.py`,
+- Prefer narrow Protocol-based ports, such as
+  `packages/stickfix-application/src/stickfix_application/ports/user_repository.py`,
   over broad service objects.
 - Keep handlers thin: parse Telegram input, build an application request, call a use
   case, and translate results/errors back to Telegram responses.
@@ -53,7 +54,7 @@
 ## Testing Notes
 
 - Add or update tests near the affected behavior:
-  - application seam/use-case tests under `tests/application/`
+  - application seam/use-case tests under `packages/stickfix-application/tests/`
   - domain tests under `packages/stickfix-domain/tests/`
   - storage tests at `tests/test_storage_*.py`
   - handler or command-flow tests near the relevant handler coverage

@@ -8,22 +8,24 @@ work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 
 import logging
 
-from telegram import ParseMode, Update
-from telegram.ext import CallbackContext, CommandHandler, Dispatcher
-
-from bot.application.errors import InvalidCommandInputError
-from bot.application.requests import (
+from stickfix_application.errors import InvalidCommandInputError
+from stickfix_application.requests import (
   DeleteUserCommand,
   EnsureUserCommand,
   SetModeCommand,
   SetShuffleCommand,
 )
-from bot.application.use_cases import DeleteUser, EnsureUser, GetHelp, SetMode, SetShuffle
+from stickfix_application.use_cases import DeleteUser, EnsureUser, GetHelp, SetMode, SetShuffle
+from telegram import ParseMode, Update
+from telegram.ext import CallbackContext, CommandHandler, Dispatcher
+
 from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import unexpected_error
 from bot.utils.messages import Commands, get_message_meta
 
 logger = logging.getLogger(__name__)
+_INVALID_MODE_PREFIX = "Sorry, I didn't understand. This command syntax is "
+_INVALID_MODE_SYNTAX = "`/setMode private` or `setMode public`."
 
 
 def send_help_message(update: Update, context: CallbackContext, get_help: GetHelp) -> None:
@@ -102,9 +104,7 @@ class UserHandler(StickfixHandler):
         message.reply_text("Leave it to me!")
         logger.info(f"Changed {user.username} to {mode} mode.")
     except InvalidCommandInputError:
-      message.reply_markdown(
-        "Sorry, I didn't understand. This command syntax is `/setMode private` or `setMode public`."
-      )
+      message.reply_markdown(_INVALID_MODE_PREFIX + _INVALID_MODE_SYNTAX)
       logger.debug("Handled exception.")
     except Exception as e:
       unexpected_error(e, logger)

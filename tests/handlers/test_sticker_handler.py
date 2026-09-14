@@ -3,16 +3,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from hamcrest import assert_that, equal_to
-from telegram.ext import CommandHandler
-
-from bot.application.errors import WrongInteractionContextError
-from bot.application.requests import (
+from stickfix_application.errors import WrongInteractionContextError
+from stickfix_application.requests import (
   AddStickerCommand,
   DeleteStickerCommand,
   GetStickersQuery,
   InteractionScope,
 )
-from bot.application.results import AddStickerResult, DeleteStickerResult, GetStickersResult
+from stickfix_application.results import AddStickerResult, DeleteStickerResult, GetStickersResult
+from telegram.ext import CommandHandler
+
 from bot.handlers.stickers import StickerHandler
 from bot.utils.messages import Commands
 from tests.handlers.support import FakeDispatcher, command_callback

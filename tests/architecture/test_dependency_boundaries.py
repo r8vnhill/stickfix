@@ -16,16 +16,10 @@ import pytest
 from conftest import ROOT
 
 DOMAIN_SOURCE_ROOT = ROOT / "packages" / "stickfix-domain" / "src"
+APPLICATION_SOURCE_ROOT = ROOT / "packages" / "stickfix-application" / "src"
+APPLICATION_ALLOWED_NAMESPACES = ("stickfix_application", "stickfix_domain")
 
 FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
-  "bot.application": (
-    "telegram",
-    "bot.handlers",
-    "bot.infrastructure",
-    "bot.database",
-    "sqlalchemy",
-    "psycopg",
-  ),
   "bot.handlers": (
     "bot.infrastructure.persistence",
     "bot.infrastructure.migration",
@@ -143,6 +137,23 @@ def test_domain_absolute_imports_are_limited_to_the_standard_library() -> None:
   assert not nonconformances, "\n".join(nonconformances)
 
 
+def test_application_absolute_imports_are_limited_to_an_explicit_allowlist() -> None:
+  """stickfix-application only ever reaches stdlib, itself, or stickfix-domain."""
+  boundary = PackageBoundary(namespace="stickfix_application", source_root=APPLICATION_SOURCE_ROOT)
+  nonconformances = [
+    f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
+    for path in python_modules(boundary)
+    for edge in import_edges(path, boundary)
+    if edge.imported.partition(".")[0] not in sys.stdlib_module_names
+    and not any(
+      matches_forbidden_prefix(edge.imported, namespace)
+      for namespace in APPLICATION_ALLOWED_NAMESPACES
+    )
+  ]
+
+  assert not nonconformances, "\n".join(nonconformances)
+
+
 def test_domain_excludes_logging_despite_being_stdlib() -> None:
   """The domain contract deliberately excludes logging as an effect."""
   boundary = PackageBoundary(namespace="stickfix_domain", source_root=DOMAIN_SOURCE_ROOT)
@@ -156,14 +167,15 @@ def test_domain_excludes_logging_despite_being_stdlib() -> None:
   assert not nonconformances, "\n".join(nonconformances)
 
 
-def test_no_production_module_imports_the_removed_bot_domain_namespace() -> None:
-  """The namespace cutover left no production import edge into ``bot.domain``."""
+@pytest.mark.parametrize("removed_namespace", ["bot.domain", "bot.application"])
+def test_no_production_module_imports_a_removed_bot_namespace(removed_namespace: str) -> None:
+  """The namespace cutovers left no production import edge into removed ``bot.*`` packages."""
   boundary = PackageBoundary(namespace="bot", source_root=ROOT)
   nonconformances = [
     f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
     for path in python_modules(boundary)
     for edge in import_edges(path, boundary)
-    if matches_forbidden_prefix(edge.imported, "bot.domain")
+    if matches_forbidden_prefix(edge.imported, removed_namespace)
   ]
 
   assert not nonconformances, "\n".join(nonconformances)
@@ -171,16 +183,16 @@ def test_no_production_module_imports_the_removed_bot_domain_namespace() -> None
 
 def test_scanner_derives_current_flat_layout_module_names() -> None:
   """The current repository layout remains supported by explicit boundaries."""
-  boundary = PackageBoundary(namespace="bot.application", source_root=ROOT)
+  boundary = PackageBoundary(namespace="bot.handlers", source_root=ROOT)
 
-  assert module_name(ROOT / "bot" / "application" / "requests.py", boundary) == (
-    "bot.application.requests"
+  assert module_name(ROOT / "bot" / "handlers" / "stickers.py", boundary) == (
+    "bot.handlers.stickers"
   )
-  assert module_name(ROOT / "bot" / "application" / "__init__.py", boundary) == "bot.application"
+  assert module_name(ROOT / "bot" / "handlers" / "common.py", boundary) == "bot.handlers.common"
 
 
 def test_scanner_derives_src_layout_module_names(tmp_path: Path) -> None:
-  """The same scanner supports a future workspace package's src layout."""
+  """The same scanner supports a workspace package's ``src`` layout."""
   source_root = tmp_path / "packages" / "stickfix-domain" / "src"
   package_root = source_root / "stickfix_domain" / "services"
   package_root.mkdir(parents=True)

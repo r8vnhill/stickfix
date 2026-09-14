@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 import pytest
 from hamcrest import assert_that, empty, equal_to, has_length, instance_of, is_
+from stickfix_application.requests import ClearInlineCacheCommand, InlineQueryRequest
+from stickfix_application.results import AcknowledgementResult, InlineQueryResult
 from telegram import InlineQueryResultArticle, InlineQueryResultCachedSticker, ParseMode
 from telegram.ext import ChosenInlineResultHandler, InlineQueryHandler
 
-from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
-from bot.application.results import AcknowledgementResult, InlineQueryResult
 from bot.handlers.inline import InlineHandler
 from tests.handlers.support import FakeDispatcher, chosen_result_callback, inline_query_callback
 
@@ -191,15 +191,20 @@ def test_inline_query_renders_application_sticker_ids_without_help_article() -> 
   call_inline_get(dispatcher, bot)
 
   results = returned_results(bot)
-  assert_that(results, has_length(2))
+  assert_cached_stickers(results, ("sticker-a", "sticker-b"))
+  assert_answer_arguments(bot)
+
+
+def assert_cached_stickers(results: list[object], expected_ids: tuple[str, ...]) -> None:
+  """Assert that Telegram results contain only the expected cached stickers."""
+  assert_that(results, has_length(len(expected_ids)))
   assert_that(
     all(isinstance(result, InlineQueryResultCachedSticker) for result in results), is_(True)
   )
   assert_that(
     tuple(result.sticker_file_id for result in results),
-    equal_to(("sticker-a", "sticker-b")),
+    equal_to(expected_ids),
   )
-  assert_answer_arguments(bot)
 
 
 def test_invalid_inline_query_offset_raises_before_answering() -> None:

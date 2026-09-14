@@ -4,6 +4,7 @@ requires-python = ">=3.14, <4"
 
 [manifest]
 members = [
+    "stickfix-application",
     "stickfix-bot",
     "stickfix-domain",
 ]
@@ -601,6 +602,17 @@ wheels = [
 ]
 
 [[package]]
+name = "stickfix-application"
+version = "0.1.0"
+source = { editable = "packages/stickfix-application" }
+dependencies = [
+    { name = "stickfix-domain" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "stickfix-domain", editable = "packages/stickfix-domain" }]
+
+[[package]]
 name = "stickfix-bot"
 version = "0.1.0"
 source = { editable = "." }
@@ -612,6 +624,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "six" },
     { name = "sqlalchemy" },
+    { name = "stickfix-application" },
     { name = "stickfix-domain" },
     { name = "urllib3" },
 ]
@@ -648,6 +661,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "six", specifier = ">=1.17,<1.18" },
     { name = "sqlalchemy", specifier = ">=2.0.52,<3" },
+    { name = "stickfix-application", editable = "packages/stickfix-application" },
     { name = "stickfix-domain", editable = "packages/stickfix-domain" },
     { name = "urllib3", specifier = ">=1.26,<1.27" },
 ]

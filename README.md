@@ -112,9 +112,10 @@ Domain and application code never import Telegram or SQLAlchemy.
 
 - **Interface** (`bot.handlers`, `bot.stickfix`) — parse Telegram updates, call a
   use case, format replies. No business rules.
-- **Application** (`bot.application`) — `requests` (input DTOs), `results` (output
-  DTOs), `errors` (Telegram-free failures), `use_cases` (one callable class per
-  command), `ports` (outbound `Protocol`s).
+- **Application** (`stickfix_application`, in `packages/stickfix-application/`) —
+  `requests` (input DTOs), `results` (output DTOs), `errors` (Telegram-free
+  failures), `use_cases` (one callable class per command), `ports` (outbound
+  `Protocol`s).
 - **Domain** (`stickfix_domain`, in `packages/stickfix-domain/`) — `StickfixUser`
   and `StickerPackService` hold sticker/tag rules, pack selection, shuffle, and
   cache behavior. `UserId` is a `NewType("UserId", int)`.

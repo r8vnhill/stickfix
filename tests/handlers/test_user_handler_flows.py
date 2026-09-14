@@ -3,10 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from hamcrest import assert_that, equal_to
+from stickfix_application.requests import DeleteUserCommand, EnsureUserCommand, SetShuffleCommand
+from stickfix_application.results import AcknowledgementResult
 from telegram.ext import CommandHandler
 
-from bot.application.requests import DeleteUserCommand, EnsureUserCommand, SetShuffleCommand
-from bot.application.results import AcknowledgementResult
 from bot.handlers.utility import HelperHandler, UserHandler
 from bot.utils.messages import Commands
 from tests.handlers.support import FakeDispatcher, command_callback

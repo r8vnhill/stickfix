@@ -6,11 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from stickfix_domain.services import StickerPackService
-from telegram.ext import CallbackContext, Dispatcher, Updater
-
-from bot.application.ports import PublicPackRepository, UserRepository
-from bot.application.use_cases import (
+from stickfix_application.ports import PublicPackRepository, UserRepository
+from stickfix_application.use_cases import (
   AddSticker,
   ClearInlineCache,
   DeleteSticker,
@@ -22,6 +19,9 @@ from bot.application.use_cases import (
   SetMode,
   SetShuffle,
 )
+from stickfix_domain.services import StickerPackService
+from telegram.ext import CallbackContext, Dispatcher, Updater
+
 from bot.config import DATABASE_URL_ENVVAR
 from bot.handlers.common import HELP_PATH
 from bot.handlers.inline import InlineHandler

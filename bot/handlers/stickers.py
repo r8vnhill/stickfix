@@ -8,18 +8,18 @@ work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 
 import logging
 
-from telegram import Message, Sticker, Update
-from telegram.error import BadRequest
-from telegram.ext import CallbackContext, CommandHandler, Dispatcher
-
-from bot.application.errors import MissingStickerError, WrongInteractionContextError
-from bot.application.requests import (
+from stickfix_application.errors import MissingStickerError, WrongInteractionContextError
+from stickfix_application.requests import (
   AddStickerCommand,
   DeleteStickerCommand,
   GetStickersQuery,
   InteractionScope,
 )
-from bot.application.use_cases import AddSticker, DeleteSticker, GetStickers
+from stickfix_application.use_cases import AddSticker, DeleteSticker, GetStickers
+from telegram import Message, Sticker, Update
+from telegram.error import BadRequest
+from telegram.ext import CallbackContext, CommandHandler, Dispatcher
+
 from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
 from bot.utils.messages import (

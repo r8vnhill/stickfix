@@ -15,6 +15,10 @@ work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 import logging
 from uuid import uuid4
 
+from stickfix_application.requests import ClearInlineCacheCommand, InlineQueryRequest
+from stickfix_application.results import InlineQueryResult
+from stickfix_application.use_cases.clear_inline_cache import ClearInlineCache
+from stickfix_application.use_cases.resolve_inline_query import ResolveInlineQuery
 from telegram import (
   InlineQueryResultArticle,
   InlineQueryResultCachedSticker,
@@ -24,10 +28,6 @@ from telegram import (
 )
 from telegram.ext import CallbackContext, ChosenInlineResultHandler, Dispatcher, InlineQueryHandler
 
-from bot.application.requests import ClearInlineCacheCommand, InlineQueryRequest
-from bot.application.results import InlineQueryResult
-from bot.application.use_cases.clear_inline_cache import ClearInlineCache
-from bot.application.use_cases.resolve_inline_query import ResolveInlineQuery
 from bot.handlers.common import StickfixHandler, optional_caller_id
 from bot.utils.errors import unexpected_error
 

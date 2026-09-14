@@ -230,7 +230,7 @@ First package extraction.
 
 ---
 
-# Phase 4.4 — Extract `stickfix-application`
+# Phase 4.4 — Extract `stickfix-application` [DONE]
 
 ## Goal
 

@@ -19,9 +19,8 @@ from functools import partial
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
+from stickfix_application.ports import PublicPackRepository, UserRepository
 from stickfix_domain import SF_PUBLIC, StickfixUser, UserId
-
-from bot.application.ports import PublicPackRepository, UserRepository
 
 from .mappers import public_pack_from_rows, user_from_rows
 from .models import (
@@ -178,7 +177,12 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
 def _user_sticker_tag_row(
   user_id: int, tag_id: int, sticker_id: str, position: int
 ) -> UserStickerTagRow:
-  return UserStickerTagRow(user_id=user_id, tag_id=tag_id, sticker_id=sticker_id, position=position)
+  return UserStickerTagRow(
+    user_id=user_id,
+    tag_id=tag_id,
+    sticker_id=sticker_id,
+    position=position,
+  )
 
 
 def _user_cached_sticker_row(
