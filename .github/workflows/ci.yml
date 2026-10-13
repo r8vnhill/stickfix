@@ -1,3 +1,13 @@
+# Stickfix CI. Three independent jobs; tests/architecture/test_workspace_contract.py and
+# test_container_contract.py pin their steps, ordering, locked execution, and the uv version.
+#
+# - quality: lock check, locked sync, lint, format, full pytest (incl. wheel and isolated-install
+#   contracts), and the three workspace wheel builds.
+# - postgres-contract: Alembic migrations and integration tests against a disposable database.
+# - container: real image build plus offline runtime and migration-CLI smoke checks.
+#
+# The setup-uv version must equal UV_VERSION in tests/architecture/package_contract_support.py
+# and the uv pin in the Dockerfile.
 name: CI
 
 on:
@@ -7,6 +17,8 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      UV_LOCKED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
@@ -14,17 +26,22 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
         with:
-          version: "0.9.8"
-      - run: uv sync --locked
-      - run: uv run ruff check
-      - run: uv run ruff format --check
-      - run: uv run pytest
+          version: "0.12.7"
+      - run: uv lock --check
+      - run: uv sync --all-packages --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+      - run: uv run --locked pytest
       - run: uv build --package stickfix-domain
       - run: uv build --package stickfix-application
       - run: uv build --package stickfix-bot
 
   postgres-contract:
     runs-on: ubuntu-latest
+    env:
+      UV_LOCKED: "1"
+      STICKFIX_DATABASE_URL: >-
+        postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
     services:
       postgres:
         image: postgres:18.6-bookworm
@@ -46,17 +63,36 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
         with:
-          version: "0.9.8"
+          version: "0.12.7"
       - run: uv sync --locked
-      - run: uv run alembic upgrade head
+      - run: uv run --locked alembic upgrade head
+      - run: uv run --locked alembic check
+      # Integration tests opt in through their own variable; reuse the job's disposable database.
+      - run: uv run --locked pytest -m integration
         env:
-          STICKFIX_DATABASE_URL: >-
-            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
-      - run: uv run alembic check
+          STICKFIX_TEST_DATABASE_URL: ${{ env.STICKFIX_DATABASE_URL }}
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t stickfix:ci .
+      # Offline: proves startup neither re-syncs nor downloads anything (needs no token or DB).
+      - run: >-
+          docker run --rm -i --network none -e UV_OFFLINE=1 stickfix:ci
+          uv run python - < tests/architecture/container_smoke.py
+      - run: >-
+          docker run --rm --network none -e UV_OFFLINE=1 stickfix:ci
+          uv run alembic --version
+      - name: Check the default command and runtime no-sync policy
+        run: |
+          cmd="$(docker image inspect stickfix:ci --format '{{json .Config.Cmd}}')"
+          expected='["uv","run","python","-m","bot"]'
+          test "$cmd" = "$expected" || { echo "unexpected CMD: $cmd"; exit 1; }
+          docker image inspect stickfix:ci --format '{{json .Config.Env}}' \
+            | grep -q '"UV_NO_SYNC=1"'
+      # Placeholder values only satisfy interpolation; no services are started.
+      - run: docker compose config --quiet
         env:
-          STICKFIX_DATABASE_URL: >-
-            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
-      - run: uv run pytest -m integration
-        env:
-          STICKFIX_TEST_DATABASE_URL: >-
-            postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix
+          POSTGRES_PASSWORD: compose-test
+          STICKFIX_TOKEN: compose-test

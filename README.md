@@ -144,29 +144,36 @@ Persistence model:
 
 1. Install `uv` globally (e.g., `python -m pip install --user uv` or see
    [uv docs](https://docs.astral.sh/uv)).
-2. Run `uv sync` from the repo root to create or refresh the locked virtual
-   environment defined by `uv.lock`.
-3. When the dependency graph changes, update it with `uv lock` and commit both
-   `pyproject.toml` and the regenerated `uv.lock`.
-
-Ensure `uv` is pointing to a Python 3.14 or newer interpreter
-(`uv python list`/`uv python use`).
+2. Pin Python 3.14 and create the locked environment (includes the default `dev` group):
+   ```bash
+   uv python pin 3.14
+   uv sync --locked
+   ```
+3. Change dependencies only as described in CONTRIBUTING.md's dependency metadata workflow, which
+   keeps `pyproject.toml` and `uv.lock` in step.
 
 ### Common commands
 
-- `uv run ruff check` — run lint rules and formatting checks defined in `ruff.toml`.
-- `uv run ruff format` — autoformat files that need cleanup.
-- `uv run pytest` — execute the test suite (or pass `-- -k <pattern>` for subsets).
-- `uv run python -m bot.stickfix` — run the bot or other scripts inside the locked environment.
+```bash
+uv run --locked ruff check .
+uv run --locked ruff format .
+uv run --locked pytest
+uv run --locked python -m bot
+```
+
+Run a subset of tests with `uv run --locked pytest -k <pattern>` (replace `<pattern>`).
+`python -m bot` needs a Telegram token (for example `STICKFIX_TOKEN`) and
+`STICKFIX_DATABASE_URL`.
 
 ### Advanced workflows
 
-For CI/CD configuration, optional database and graph extras, and legacy tooling
-migration, see [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full verification workflow, covering the
+workspace, packaging, the container, and CI. It also covers the optional extras, the dependency
+policy, and legacy tooling.
 
 ## Troubleshooting
 
-- **Import errors**: Run `uv sync` to ensure all dependencies are installed.
+- **Import errors**: Run `uv sync --locked` to install the locked dependencies.
 - **Token errors**: Verify `STICKFIX_TOKEN` matches the token from BotFather.
 - **Database errors**: Verify `STICKFIX_DATABASE_URL` and that PostgreSQL is healthy.
 - **Bot not responding**: Check `logs/stickfix.log` for error messages.

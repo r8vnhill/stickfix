@@ -1,3 +1,9 @@
+# Authoritative lint and format settings; test_toolchain_config.py keeps them aligned with
+# pyproject.toml (Python 3.14) and .editorconfig (two-space indentation).
+
+# Ruff also formats Python code blocks in Markdown. Historical traceability records keep the
+# snippets they were written with.
+extend-exclude = ["traceability-log"]
 indent-width = 2
 line-length = 100
 target-version = "py314"

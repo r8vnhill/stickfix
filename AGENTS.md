@@ -11,8 +11,10 @@
 ## Project Shape
 
 - Stickfix is a Telegram sticker tagging bot built with `python-telegram-bot` 13.x.
-- Runtime entry is `Stickfix(token).run()` in `bot/stickfix.py`; local `bot.py` and
-  `secret.yml` are intentionally gitignored and must not be committed.
+- The runtime entry is `python -m bot`. `bot/__main__.py` loads `bot.config` and runs
+  `Stickfix(token, database_url=...)` from `bot/stickfix.py`; the container `CMD` wraps it in
+  `uv run`. The local `bot.py` and `secret.yml` are intentionally gitignored and must not be
+  committed.
 - The codebase is moving toward a layered architecture:
   - `bot/handlers/` contains Telegram adapters.
   - `packages/stickfix-application/` contains transport-agnostic request/result DTOs, errors,
@@ -29,11 +31,20 @@
 
 - Use `uv` for dependency management. Prefer `uv sync` for local development; the default
   `dev` dependency group provides development tooling.
-- Run checks with:
-  - `uv run ruff check`
-  - `uv run ruff format` when formatting is needed
-  - `uv run pytest`
-- When dependencies change, update `pyproject.toml`, run `uv lock`, and commit `uv.lock` with it.
+- Run the same locked checks as CI (`uv run --locked ruff format .` when formatting is needed):
+  - `uv lock --check`
+  - `uv sync --all-packages --locked`
+  - `uv run --locked ruff check .`
+  - `uv run --locked ruff format --check .`
+  - `uv run --locked pytest`
+- When dependencies change, follow `CONTRIBUTING.md`'s dependency metadata workflow: update
+  `pyproject.toml`, the policy in `tests/architecture/dependency_policy.py`, and its documented
+  table, then run `uv lock` and commit `uv.lock` in the same change.
+- When runtime package contents change (a new top-level module, data file, or source directory),
+  keep the `Dockerfile` copying every root-distribution source, and update the wheel and
+  container assurance tests (`tests/architecture/test_root_distribution.py`,
+  `tests/architecture/test_container_contract.py`). The maintenance checklist in
+  `CONTRIBUTING.md` lists the other coupled changes, such as the uv version and workspace members.
 - Avoid generated/runtime directories such as `.venv/`, `venv/`, `.pytest-tmp/`,
   `.pytest_cache/`, `worktmp/`, `data/`, and `logs/`.
 
@@ -56,8 +67,11 @@
 - Add or update tests near the affected behavior:
   - application seam/use-case tests under `packages/stickfix-application/tests/`
   - domain tests under `packages/stickfix-domain/tests/`
-  - storage tests at `tests/test_storage_*.py`
+  - PostgreSQL repository contracts under `tests/infrastructure/persistence/` (marked
+    `integration`; they need `STICKFIX_TEST_DATABASE_URL`)
   - handler or command-flow tests near the relevant handler coverage
+  - packaging, dependency, workspace, container, and documentation contracts under
+    `tests/architecture/`
 - Use in-memory fakes for application-layer tests instead of Telegram objects or
   filesystem/YAML details.
 - Treat compatibility quirks called out in the traceability log as deliberate behavior
@@ -71,3 +85,6 @@
 - Optional extras exist for database and graph work (`uv sync --extra db`,
   `uv sync --extra graph`), but do not introduce or depend on them unless the
   maintainer chooses that path.
+- The Docker image installs with `uv sync --locked --no-dev` and sets `UV_NO_SYNC=1` so that
+  `uv run` never re-syncs at startup. Keep the `CMD` and the Compose commands unchanged until
+  Milestone 4.6, and never set `UV_NO_SYNC` for local development.

@@ -8,7 +8,6 @@ dependencies.
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from package_contract_support import (
   project_metadata,
   run_isolated_python,
   run_uv,
+  venv_python,
   wheel_metadata,
 )
 
@@ -216,7 +216,7 @@ def _install_locked_runtime(temporary_root: Path, requirements: Path, wheels: li
   """Install pinned third-party requirements and then the local wheels without resolution."""
   venv = temporary_root / "venv"
   run_uv("venv", "--python", "3.14", str(venv))
-  python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+  python = venv_python(venv)
   run_uv("pip", "sync", "--python", str(python), str(requirements))
   run_uv("pip", "install", "--python", str(python), "--no-deps", *(str(w) for w in wheels))
   return python

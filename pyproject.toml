@@ -1,3 +1,5 @@
+# Build-backend ranges are resolved at build time and are not covered by uv.lock; see
+# CONTRIBUTING.md ("Workspace and packaging verification") for the reproducibility boundary.
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools>=66", "wheel>=0.40"]

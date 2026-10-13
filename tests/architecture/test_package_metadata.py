@@ -13,11 +13,11 @@ import pytest
 from package_contract_support import (
   DEV_DEPENDENCIES,
   application_metadata,
+  build_isolated_application_interpreter,
   build_wheel,
   dependency_name,
   domain_metadata,
   install_wheel_in_venv,
-  install_wheels_in_venv,
   named_dependencies,
   project_metadata,
   run_application_import_probe,
@@ -167,18 +167,3 @@ def test_domain_and_application_wheels_import_together_in_isolation(tmp_path: Pa
 
   assert result.returncode == 0, result.stderr
   assert result.stdout.strip() == ""
-
-
-def build_isolated_application_interpreter(tmp_path: Path) -> Path:
-  """Build and install domain and application wheels in a temporary environment."""
-  dist_dir = tmp_path / "dist"
-  wheels = [
-    build_wheel(dist_dir, "--package", "stickfix-domain", pattern="stickfix_domain-*.whl"),
-    build_wheel(
-      dist_dir,
-      "--package",
-      "stickfix-application",
-      pattern="stickfix_application-*.whl",
-    ),
-  ]
-  return install_wheels_in_venv(tmp_path / "venv", wheels)

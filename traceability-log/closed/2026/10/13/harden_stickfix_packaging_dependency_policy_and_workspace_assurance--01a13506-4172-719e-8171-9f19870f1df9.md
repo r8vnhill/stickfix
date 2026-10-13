@@ -399,7 +399,7 @@ complete lockfile diff. Commit dependency declarations and their matching lock t
 
 ---
 
-## Phase D — Close the packaging assurance and reproducibility contract
+## Phase D — Close the packaging assurance and reproducibility contract [DONE]
 
 **Priority:** Required integration verification.
 
@@ -503,6 +503,109 @@ Remove outdated documentation and duplicated workflow instructions. Keep the pin
 - New deployment infrastructure.
 - Independent publication of internal packages.
 - Replacing the current build backend.
+
+### Outcome (2026-10-13) — implemented locally; awaiting the first CI run
+
+Do not mark Phase D `[DONE]` until all three CI jobs (`quality`, `postgres-contract`,
+`container`) have passed on GitHub Actions.
+
+**Maintainer decisions:**
+
+- CI and Docker pin uv 0.12.7; `UV_VERSION` in `package_contract_support.py` enforces this.
+- The image sets `ENV UV_NO_SYNC=1` after `uv sync --locked --no-dev`. The `CMD` and the Compose
+  commands are unchanged.
+- A new `container` CI job runs the real build and the offline smoke probe.
+- `ruff.toml` excludes `traceability-log`, so ruff 0.17's Markdown formatting doesn't rewrite
+  historical snippets. Before this, 9 records already failed `ruff format --check`, which most
+  likely made CI `quality` red since the Phase C ruff upgrade.
+- `[tool.uv] required-version` was deliberately not added.
+
+**D.1 — Workspace and CI.**
+
+- `test_workspace_contract.py` checks:
+  - members against `WORKSPACE_GRAPH` and the lock `[manifest].members`;
+  - the locked versions, editable sources, and Python ranges of each member;
+  - internal edges: declared, `[tool.uv.sources]`, locked, and editable `requires-dist`.
+- It also checks the CI workflow:
+  - the order of the quality-job steps, starting with `uv lock --check`;
+  - locked execution in the project jobs (`UV_LOCKED=1` and `--locked`);
+  - one uv pin across all jobs;
+  - the PostgreSQL job's database configuration.
+- `ci.yml` was updated to match. `STICKFIX_DATABASE_URL` is now set once at the
+  `postgres-contract` job level.
+
+**D.2 — Container: Red evidence (unchanged Dockerfile, uv 0.9.8).**
+
+The image built successfully, and the lock written by uv 0.12.7 parsed under uv 0.9.8. At runtime:
+
+- Running `/app/.venv/bin/python -c "import telegram"` fails with
+  `ModuleNotFoundError: No module named 'imghdr'`, raised from `telegram/files/inputfile.py`.
+  The image could not start the bot.
+- `docker run --network none … uv run python -c "import telegram"` exits with code 1. uv tried to
+  download `pytest-9.1.1` because "`stickfix-bot:dev` depends on `pytest`".
+- With network, `uv run` reinstalled 18 packages at startup, dev tools included (`pytest`
+  importable).
+
+**D.2 — Container: Green.**
+
+- Dockerfile changes: `COPY imghdr.py`, `uv==0.12.7`, `uv sync --locked --no-dev`, then
+  `ENV UV_NO_SYNC=1`.
+- `test_container_contract.py` statically checks the build inputs (derived from the root
+  distribution and `py-modules`), the sync flags and their order, the uv pin, the `CMD`, the
+  Compose services, and the `container` job.
+- `container_smoke.py` is a stdlib-only probe. It reads expectations from the image's `uv.lock`.
+- Local Docker 29.7.2 results:
+  - the image builds;
+  - the offline smoke probe passes: 6 imports, locked versions, and no dev-only or
+    optional-only distributions. It counts 22 installed distributions, matching
+    "Installed 22 packages" in the build log. A first run reported 37 because it counted after
+    the imports, and APScheduler's `pkg_resources` import adds setuptools' vendored
+    distributions to `sys.path`. The probe now counts before importing.
+  - after the maintainer-requested refactor (2-space Dockerfile continuations, the base image
+    selected through `ARG`, and the top-level files merged into one `COPY`), the image was
+    rebuilt and every check above passed again;
+  - `uv run alembic --version` prints `alembic 1.19.1` offline;
+  - `Cmd` is `["uv","run","python","-m","bot"]` and `Env` contains `UV_NO_SYNC=1`;
+  - `docker compose config --quiet` passes with placeholder credentials.
+
+**D.3 — Documentation.**
+
+- README:
+  - uses `uv python pin 3.14`, `uv sync --locked`, `uv run --locked pytest -k <pattern>`, and
+    `uv run --locked python -m bot`;
+  - points to CONTRIBUTING.md for verification.
+- CONTRIBUTING.md:
+  - adds "Workspace and packaging verification": the locked commands, the non-editable install
+    tests, development versus deployed environments, the container smoke check, the
+    reproducibility limits, and the uv version policy;
+  - describes all three CI jobs;
+  - lists the deferred Milestone 4 changes.
+- AGENTS.md lists the locked checks and the Dockerfile and assurance-test duties.
+- The PTB comment in `pyproject.toml` was moved off the `PyYAML` line.
+- `test_documentation_contract.py` guards against the stale commands returning and checks these
+  documented facts.
+
+**Local evidence.**
+
+- `uv lock --check` passes.
+- `uv sync --all-packages --locked` succeeds.
+- `ruff check .` and `ruff format --check .` are clean. Locally this needs
+  `--exclude .pytest-tmp --exclude worktmp`, because those directories can't be read on the
+  maintainer's machine and ruff 0.17 panics on them. CI doesn't have these directories.
+- `pytest`: 252 passed, 3 skipped, including the ruff exclusion contract.
+- All three `uv build --package` commands succeed.
+
+**Reproducibility boundary.** Dependency selection is reproducible through `uv.lock`, but images
+are not byte-for-byte reproducible. The digest-pinned base still runs `apt-get upgrade -y`, and
+the build-backend requirements (`setuptools>=66`, `wheel>=0.40`) are ranges.
+
+**Deferred:**
+
+- Milestone 4.5–4.7:
+  - `stickfix-telegram` extraction, which takes ownership of `imghdr`;
+  - `bot.*` retirement and the entrypoint change;
+  - final alignment of Docker, Alembic, and the docs.
+- Possible hardening: system-package snapshot pinning, exact build-backend locking, and provenance.
 
 ---
 

@@ -1,7 +1,15 @@
-"""Shared helpers for workspace metadata and wheel contract tests.
+"""Shared helpers for the packaging, dependency, and workspace contract tests.
 
-The helpers keep build commands, archive inspection, and isolated interpreter
-setup consistent while leaving each test module responsible for its own contract.
+The helpers cover four concerns, each used by several ``tests/architecture`` modules:
+
+- metadata: ``pyproject.toml`` loading and PEP 503/508 name, specifier, and requirement
+  normalization, comparable with the forms ``uv.lock`` records;
+- lockfile: ``tomllib``-based ``uv.lock`` lookups and locked ``uv export`` selections;
+- artifacts: wheel builds, archive inspection, and temporary virtual environments;
+- isolation: running probes outside the checkout so editable installs cannot mask defects.
+
+Helpers only gather facts and fail loudly on ambiguity; each test module owns its assertions.
+``UV_VERSION`` is the single maintainer-approved uv release that CI and the Dockerfile must pin.
 """
 
 from __future__ import annotations
@@ -22,6 +30,8 @@ from dependency_policy import DependencyClass, dev_dependencies, names_in
 
 DEV_DEPENDENCIES = dev_dependencies()
 OPTIONAL_DEPENDENCIES = names_in(DependencyClass.OPTIONAL)
+# Maintainer-approved uv release (Phase D). Change it together with ci.yml and the Dockerfile.
+UV_VERSION = "0.12.7"
 REQUIREMENT_PATTERN = re.compile(
   r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*"
   r"(?:\[(?P<extras>[^\]]*)\])?\s*"
@@ -130,16 +140,16 @@ def run_uv(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
 def build_wheel(output_dir: Path, *build_args: str, pattern: str) -> Path:
   """Build one workspace wheel and require exactly one matching artifact."""
   output_dir.mkdir(parents=True, exist_ok=True)
-  result = subprocess.run(  # noqa: S603 -- the executable is discovered locally for tests.
-    [uv_executable(), "build", *build_args, "--out-dir", str(output_dir)],
-    cwd=ROOT,
-    capture_output=True,
-    text=True,
-  )
-  assert result.returncode == 0, f"uv build failed:\n{result.stdout}\n{result.stderr}"
+  run_uv("build", *build_args, "--out-dir", str(output_dir))
   matches = list(output_dir.glob(pattern))
   assert len(matches) == 1, f"expected one {pattern} wheel, found {matches}"
   return matches[0]
+
+
+def build_package_wheel(output_dir: Path, distribution: str) -> Path:
+  """Build the wheel of one workspace distribution, selected by its project name."""
+  pattern = f"{distribution.replace('-', '_')}-*.whl"
+  return build_wheel(output_dir, "--package", distribution, pattern=pattern)
 
 
 def wheel_metadata(wheel: Path) -> tuple[list[str], object]:
@@ -265,15 +275,8 @@ def locked_versions() -> dict[str, str]:
 def build_isolated_application_interpreter(tmp_path: Path) -> Path:
   """Build and install the domain and application wheels together."""
   dist_dir = tmp_path / "dist"
-  wheels = [
-    build_wheel(dist_dir, "--package", "stickfix-domain", pattern="stickfix_domain-*.whl"),
-    build_wheel(
-      dist_dir,
-      "--package",
-      "stickfix-application",
-      pattern="stickfix_application-*.whl",
-    ),
-  ]
+  extracted = ("stickfix-domain", "stickfix-application")
+  wheels = [build_package_wheel(dist_dir, distribution) for distribution in extracted]
   return install_wheels_in_venv(tmp_path / "venv", wheels)
 
 
