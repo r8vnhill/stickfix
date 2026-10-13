@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from package_contract_support import (
   DEV_DEPENDENCIES,
+  OPTIONAL_DEPENDENCIES,
   ROOT,
   build_wheel,
   dependency_name,
@@ -190,7 +191,7 @@ def _assert_locked_requirements(requirements: Path) -> None:
   runtime = named_dependencies(project_metadata()["project"]["dependencies"])
   assert runtime - internal <= names
   assert not DEV_DEPENDENCIES & names
-  assert not {"pgvector", "neo4j", "neo4j-driver"} & names
+  assert not OPTIONAL_DEPENDENCIES & names
   assert not internal & names
   assert str(ROOT.resolve()) not in text and "file://" not in text
   assert "--hash=sha256:" in text
@@ -234,7 +235,7 @@ def installed_runtime(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, P
 
 def _version_probe(expected: dict[str, str]) -> str:
   """Create a probe for distribution versions and forbidden dev or optional packages."""
-  forbidden = sorted(DEV_DEPENDENCIES | {"pgvector", "neo4j", "neo4j-driver"})
+  forbidden = sorted(DEV_DEPENDENCIES | OPTIONAL_DEPENDENCIES)
   return VERSION_PROBE.replace("@EXPECTED@", repr(json.dumps(expected))).replace(
     "@FORBIDDEN@", repr(json.dumps(forbidden))
   )

@@ -1,0 +1,389 @@
+"""Executable dependency policy checks.
+
+The typed table in ``dependency_policy`` explains why each dependency exists.
+These tests keep it consistent with ``pyproject.toml`` declarations, ``uv.lock``
+resolutions, production imports, and the compatibility evidence it cites.
+"""
+
+from __future__ import annotations
+
+import ast
+import sys
+from collections import Counter
+from importlib.metadata import version
+from pathlib import Path
+from typing import NoReturn
+
+import pytest
+from dependency_policy import (
+  DEV,
+  OVERRIDE,
+  POLICY,
+  RUNTIME,
+  WORKSPACE_GRAPH,
+  DependencyClass,
+  DependencyPolicy,
+  ImportMode,
+  policy_for,
+)
+from import_graph_support import PackageBoundary, import_edges, python_modules
+from package_contract_support import (
+  ROOT,
+  Requirement,
+  application_metadata,
+  domain_metadata,
+  locked_package,
+  locked_package_versions,
+  locked_requirement,
+  lockfile,
+  named_dependencies,
+  parse_requirement,
+  project_metadata,
+  release_tuple,
+)
+
+PATCHED_TORNADO_MINIMUM = (6, 5, 5)
+NEXT_TORNADO_MAJOR = (7, 0, 0)
+REMOVED_DEPENDENCIES = ("coloredlogs",)
+LOCAL_TOP_LEVEL_MODULES = {"imghdr"}
+PRODUCTION_ROOTS: dict[str, tuple[PackageBoundary, ...]] = {
+  "stickfix-bot": (
+    PackageBoundary(namespace="bot", source_root=ROOT),
+    PackageBoundary(namespace="alembic", source_root=ROOT),
+  ),
+  "stickfix-domain": (
+    PackageBoundary(
+      namespace="stickfix_domain", source_root=ROOT / "packages" / "stickfix-domain" / "src"
+    ),
+  ),
+  "stickfix-application": (
+    PackageBoundary(
+      namespace="stickfix_application",
+      source_root=ROOT / "packages" / "stickfix-application" / "src",
+    ),
+  ),
+}
+OWN_NAMESPACES = {
+  "stickfix-bot": {"bot"},
+  "stickfix-domain": {"stickfix_domain"},
+  "stickfix-application": {"stickfix_application"},
+}
+
+
+def fail(message: str) -> NoReturn:
+  """Fail a dependency policy check with a clear message."""
+  raise AssertionError(message)
+
+
+# --- Declarations -----------------------------------------------------------------------------
+
+
+def declared_surfaces() -> list[tuple[str, str]]:
+  """Return every root declaration as (normalized name, surface), duplicates included."""
+  metadata = project_metadata()
+  project = metadata["project"]
+  declared = [(name, RUNTIME) for name in map(_name, project["dependencies"])]
+  for extra, requirements in project["optional-dependencies"].items():
+    declared.extend((_name(requirement), f"extra:{extra}") for requirement in requirements)
+  declared.extend((_name(requirement), DEV) for requirement in metadata["dependency-groups"][DEV])
+  overrides = metadata["tool"]["uv"]["override-dependencies"]
+  declared.extend((_name(requirement), OVERRIDE) for requirement in overrides)
+  return declared
+
+
+def _name(requirement: str) -> str:
+  return parse_requirement(requirement).name
+
+
+def test_every_declaration_has_exactly_one_policy_entry_on_its_surface() -> None:
+  """Given the policy, every declared dependency has one entry on the correct surface."""
+  declared = Counter(declared_surfaces())
+  documented = Counter((entry.name, entry.surface) for entry in POLICY)
+
+  assert not [key for key, count in declared.items() if count > 1], "duplicate declarations"
+  assert not [key for key, count in documented.items() if count > 1], "duplicate policy entries"
+  assert set(declared) - set(documented) == set(), "declarations missing a policy entry"
+  assert set(documented) - set(declared) == set(), "policy entries without a declaration"
+
+
+def test_policy_names_are_normalized_and_justified() -> None:
+  """Every entry uses a PEP 503 name and explains why it is declared."""
+  for entry in POLICY:
+    assert entry.name == parse_requirement(entry.name).name, entry
+    assert entry.justification.strip(), entry
+
+
+@pytest.mark.parametrize("removed", REMOVED_DEPENDENCIES)
+def test_removed_dependencies_are_not_declared_or_locked(removed: str) -> None:
+  """Dependencies removed by maintainer decision stay out of declarations and the lock."""
+  assert removed not in {name for name, _ in declared_surfaces()}
+  assert locked_package_versions(removed) == []
+
+
+def test_internal_entries_match_workspace_sources_and_graph() -> None:
+  """Internal policy entries are exactly the workspace-sourced edges of the recorded graph."""
+  metadata = project_metadata()
+  internal = {entry.name for entry in POLICY if entry.dependency_class is DependencyClass.INTERNAL}
+  sources = metadata["tool"]["uv"]["sources"]
+  members = {
+    "stickfix-bot": metadata["project"],
+    "stickfix-domain": domain_metadata()["project"],
+    "stickfix-application": application_metadata()["project"],
+  }
+
+  assert internal == set(WORKSPACE_GRAPH["stickfix-bot"])
+  assert {name for name, source in sources.items() if source == {"workspace": True}} == internal
+  for distribution, project in members.items():
+    workspace_edges = named_dependencies(project["dependencies"]) & set(WORKSPACE_GRAPH)
+    assert workspace_edges == WORKSPACE_GRAPH[distribution], distribution
+
+
+# --- Import ownership -------------------------------------------------------------------------
+
+
+def production_top_level_imports(distribution: str) -> dict[str, list[str]]:
+  """Map third-party top-level imports in a distribution's sources to their locations."""
+  ignored = sys.stdlib_module_names | OWN_NAMESPACES[distribution] | LOCAL_TOP_LEVEL_MODULES
+  imports: dict[str, list[str]] = {}
+  for boundary in PRODUCTION_ROOTS[distribution]:
+    for path in python_modules(boundary):
+      for edge in import_edges(path, boundary):
+        top_level = edge.imported.partition(".")[0]
+        if top_level not in ignored:
+          location = f"{path.relative_to(ROOT).as_posix()}:{edge.line}"
+          imports.setdefault(top_level, []).append(location)
+  return imports
+
+
+def distribution_dependencies(distribution: str) -> set[str]:
+  """Return the direct runtime dependency names a distribution publishes."""
+  if distribution == "stickfix-bot":
+    return {entry.name for entry in POLICY if entry.surface == RUNTIME}
+  metadata = {"stickfix-domain": domain_metadata, "stickfix-application": application_metadata}
+  return named_dependencies(metadata[distribution]()["project"]["dependencies"])
+
+
+def namespace_owners() -> dict[str, str]:
+  """Map each import namespace named by the policy to its distribution."""
+  return {namespace: entry.name for entry in POLICY for namespace in entry.imports}
+
+
+@pytest.mark.parametrize("distribution", sorted(PRODUCTION_ROOTS))
+def test_production_imports_are_declared_by_the_importing_distribution(distribution: str) -> None:
+  """Given an external production import, its distribution declares the owning dependency."""
+  owners = namespace_owners()
+  declared = distribution_dependencies(distribution)
+  nonconformances = [
+    f"{location}: imports {namespace} owned by {owners.get(namespace, '<no policy entry>')}"
+    for namespace, locations in production_top_level_imports(distribution).items()
+    if owners.get(namespace) not in declared
+    for location in locations
+  ]
+
+  assert not nonconformances, "\n".join(nonconformances)
+
+
+@pytest.mark.parametrize(
+  "entry",
+  [entry for entry in POLICY if entry.import_mode is ImportMode.DIRECT],
+  ids=lambda entry: entry.name,
+)
+def test_direct_dependencies_are_imported_by_production_code(entry: DependencyPolicy) -> None:
+  """Given a direct dependency, its declared namespaces are used by production code."""
+  imported = {
+    namespace
+    for distribution in PRODUCTION_ROOTS
+    for namespace in production_top_level_imports(distribution)
+  }
+
+  assert entry.imports, f"{entry.name} is DIRECT but names no import namespace"
+  assert set(entry.imports) <= imported, f"{entry.name} is not imported by production code"
+
+
+@pytest.mark.parametrize(
+  "entry",
+  [entry for entry in POLICY if entry.import_mode is not ImportMode.DIRECT],
+  ids=lambda entry: f"{entry.name}-{entry.surface}",
+)
+def test_indirect_dependencies_are_not_imported_directly(entry: DependencyPolicy) -> None:
+  """Dynamic, compatibility, and tool dependencies stay out of production import statements."""
+  for distribution in PRODUCTION_ROOTS:
+    imported = production_top_level_imports(distribution)
+    assert not set(entry.imports) & set(imported), (entry.name, distribution)
+
+
+def test_removed_dependencies_are_not_imported_by_production_code() -> None:
+  """Production sources do not import dependencies removed from the policy."""
+  for distribution in PRODUCTION_ROOTS:
+    assert not set(REMOVED_DEPENDENCIES) & set(production_top_level_imports(distribution))
+
+
+# --- Compatibility evidence -------------------------------------------------------------------
+
+
+def defined_tests() -> set[str]:
+  """Return test function names defined in this module, read from its source."""
+  tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+  return {
+    node.name
+    for node in tree.body
+    if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+  }
+
+
+@pytest.mark.parametrize(
+  "entry",
+  [entry for entry in POLICY if entry.verified_by is not None]
+  + [entry for entry in POLICY if entry.dependency_class is DependencyClass.COMPATIBILITY],
+  ids=lambda entry: entry.name,
+)
+def test_compatibility_entries_cite_an_existing_verification_test(
+  entry: DependencyPolicy,
+) -> None:
+  """Given a compatibility-sensitive entry, it cites a concrete test that exists."""
+  assert entry.verified_by is not None, f"{entry.name} has no verification test"
+  path, separator, test_name = entry.verified_by.partition("::")
+
+  assert separator and (ROOT / path).is_file(), entry.verified_by
+  assert path == Path(__file__).relative_to(ROOT).as_posix(), entry.verified_by
+  assert test_name in defined_tests(), entry.verified_by
+
+
+def declared_requirement(name: str) -> Requirement:
+  """Return the parsed root runtime requirement for one dependency."""
+  requirements = [
+    parse_requirement(requirement)
+    for requirement in project_metadata()["project"]["dependencies"]
+    if parse_requirement(requirement).name == name
+  ]
+  assert len(requirements) == 1, (name, requirements)
+  return requirements[0]
+
+
+def test_ptb_stays_on_the_approved_13_15_baseline() -> None:
+  """PTB stays on its approved synchronous 13.x declaration and resolves to 13.15."""
+  assert declared_requirement("python-telegram-bot").specifier == "<14,>=13.15"
+  assert locked_package_versions("python-telegram-bot") == ["13.15"]
+
+
+def test_psycopg_is_loaded_through_the_sqlalchemy_dialect() -> None:
+  """The postgresql+psycopg URL dialect resolves its DBAPI to the declared psycopg driver."""
+  from sqlalchemy.engine import make_url
+
+  dialect = make_url("postgresql+psycopg://user@localhost/stickfix").get_dialect()
+
+  assert dialect.import_dbapi().__name__ == "psycopg"
+  assert declared_requirement("psycopg").extras == ("binary",)
+
+
+def test_urllib3_stays_on_the_ptb_fallback_line() -> None:
+  """urllib3 stays declared and resolved on the 1.26.x line PTB 13 falls back to."""
+  assert declared_requirement("urllib3").specifier == "<1.27,>=1.26"
+  (locked,) = locked_package_versions("urllib3")
+  assert (1, 26) <= release_tuple(locked) < (1, 27)
+
+
+def test_six_stays_within_its_retained_bound() -> None:
+  """six stays declared and resolved within its retained legacy bound."""
+  assert declared_requirement("six").specifier == "<1.18,>=1.17"
+  (locked,) = locked_package_versions("six")
+  assert (1, 17) <= release_tuple(locked) < (1, 18)
+
+
+def check_patched_tornado_boundary(tornado_version: tuple[int, ...]) -> None:
+  """Check that a Tornado version is patched and still on the 6.x line."""
+  if tornado_version < PATCHED_TORNADO_MINIMUM:
+    fail(f"Tornado {tornado_version} is below the patched minimum")
+  if tornado_version >= NEXT_TORNADO_MAJOR:
+    fail(f"Tornado {tornado_version} is outside the supported 6.x line")
+
+
+def test_resolved_tornado_version_is_patched_and_bounded() -> None:
+  """Tornado must stay within the patched 6.x line."""
+  check_patched_tornado_boundary(release_tuple(version("tornado")))
+
+
+def test_lockfile_contains_exactly_one_patched_tornado_release() -> None:
+  """The committed uv lockfile must not regress to vulnerable Tornado."""
+  tornado_versions = locked_package_versions("tornado")
+
+  if len(tornado_versions) != 1:
+    fail(f"Expected exactly one locked Tornado release, got {tornado_versions}")
+  check_patched_tornado_boundary(release_tuple(tornado_versions[0]))
+
+
+# --- Lockfile consistency ---------------------------------------------------------------------
+
+
+def expected_requires_dist() -> set[Requirement]:
+  """Return root runtime and extra requirements as uv records them in lock metadata."""
+  metadata = project_metadata()
+  project = metadata["project"]
+  sources = metadata["tool"]["uv"]["sources"]
+  expected = {
+    parse_requirement(requirement)
+    for requirement in project["dependencies"]
+    if parse_requirement(requirement).name not in sources
+  }
+  for extra, requirements in project["optional-dependencies"].items():
+    expected |= {
+      parse_requirement(requirement, marker=f"extra == '{extra}'") for requirement in requirements
+    }
+  return expected
+
+
+def test_locked_root_metadata_matches_declared_requirements() -> None:
+  """Given pyproject.toml and uv.lock, the root's locked metadata mirrors its declarations."""
+  metadata = project_metadata()
+  locked = locked_package("stickfix-bot")
+  requires_dist = locked["metadata"]["requires-dist"]
+  registry = {locked_requirement(entry) for entry in requires_dist if "editable" not in entry}
+  editable = {entry["name"]: entry["editable"] for entry in requires_dist if "editable" in entry}
+
+  assert registry == expected_requires_dist()
+  assert editable == {name: f"packages/{name}" for name in metadata["tool"]["uv"]["sources"]}
+  assert sorted(locked["metadata"]["provides-extras"]) == sorted(
+    metadata["project"]["optional-dependencies"]
+  )
+
+
+def test_locked_root_dev_group_matches_declared_requirements() -> None:
+  """The locked development group mirrors the declared dependency group."""
+  locked = locked_package("stickfix-bot")
+  declared = {
+    parse_requirement(requirement) for requirement in project_metadata()["dependency-groups"][DEV]
+  }
+
+  assert {locked_requirement(entry) for entry in locked["metadata"]["requires-dev"][DEV]} == (
+    declared
+  )
+  assert {entry["name"] for entry in locked["dev-dependencies"][DEV]} == {
+    requirement.name for requirement in declared
+  }
+
+
+def test_locked_root_dependency_edges_match_declarations() -> None:
+  """Locked runtime and extra edges name exactly the declared distributions and extras."""
+  project = project_metadata()["project"]
+  locked = locked_package("stickfix-bot")
+  runtime = {
+    (requirement.name, requirement.extras)
+    for requirement in map(parse_requirement, project["dependencies"])
+  }
+
+  assert {
+    (entry["name"], tuple(entry.get("extra", ()))) for entry in locked["dependencies"]
+  } == runtime
+  for extra, requirements in project["optional-dependencies"].items():
+    assert {entry["name"] for entry in locked["optional-dependencies"][extra]} == (
+      named_dependencies(requirements)
+    )
+
+
+def test_locked_override_matches_the_declared_override() -> None:
+  """The lock manifest records the declared Tornado override unchanged."""
+  declared = project_metadata()["tool"]["uv"]["override-dependencies"]
+  overrides = {locked_requirement(entry) for entry in lockfile()["manifest"]["overrides"]}
+
+  assert overrides == {parse_requirement(requirement) for requirement in declared}
+  assert policy_for("tornado", OVERRIDE).dependency_class is DependencyClass.COMPATIBILITY

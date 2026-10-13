@@ -11,22 +11,33 @@ import re
 import shutil
 import subprocess
 import zipfile
+from dataclasses import dataclass
 from email.parser import BytesParser
 from email.policy import default
 from pathlib import Path
 
 import tomllib
 from conftest import ROOT
+from dependency_policy import DependencyClass, dev_dependencies, names_in
 
-DEV_DEPENDENCIES = {
-  "hypothesis",
-  "pre-commit",
-  "pyhamcrest",
-  "pytest",
-  "pytest-bdd",
-  "pytest-cov",
-  "ruff",
-}
+DEV_DEPENDENCIES = dev_dependencies()
+OPTIONAL_DEPENDENCIES = names_in(DependencyClass.OPTIONAL)
+REQUIREMENT_PATTERN = re.compile(
+  r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*"
+  r"(?:\[(?P<extras>[^\]]*)\])?\s*"
+  r"(?P<specifier>[^;]*?)\s*"
+  r"(?:;\s*(?P<marker>.+?))?\s*$"
+)
+
+
+@dataclass(frozen=True)
+class Requirement:
+  """A normalized requirement, comparable between pyproject and uv.lock forms."""
+
+  name: str
+  extras: tuple[str, ...] = ()
+  specifier: str = ""
+  marker: str | None = None
 
 
 def load_pyproject(path: Path) -> dict[str, object]:
@@ -35,10 +46,43 @@ def load_pyproject(path: Path) -> dict[str, object]:
     return tomllib.load(metadata_file)
 
 
+def normalize_name(name: str) -> str:
+  """Normalize a distribution name following PEP 503."""
+  return re.sub(r"[-_.]+", "-", name.strip()).lower()
+
+
 def dependency_name(requirement: str) -> str:
   """Normalize the distribution name at the start of a requirement."""
-  name = re.split(r"[<>=!~\[]", requirement, maxsplit=1)[0]
-  return name.strip().lower().replace("_", "-")
+  return normalize_name(re.split(r"[<>=!~\[;\s]", requirement.strip(), maxsplit=1)[0])
+
+
+def normalize_specifier(specifier: str) -> str:
+  """Normalize a version specifier set by dropping whitespace and sorting its clauses."""
+  clauses = (clause for clause in re.sub(r"\s+", "", specifier).split(",") if clause)
+  return ",".join(sorted(clauses))
+
+
+def parse_requirement(requirement: str, marker: str | None = None) -> Requirement:
+  """Parse a PEP 508 requirement string without markers beyond an optional extra marker."""
+  match = REQUIREMENT_PATTERN.match(requirement)
+  assert match is not None, f"unparsable requirement: {requirement!r}"
+  extras = match.group("extras") or ""
+  return Requirement(
+    name=normalize_name(match.group("name")),
+    extras=tuple(sorted(normalize_name(extra) for extra in extras.split(",") if extra.strip())),
+    specifier=normalize_specifier(match.group("specifier")),
+    marker=match.group("marker") or marker,
+  )
+
+
+def locked_requirement(entry: dict[str, object]) -> Requirement:
+  """Convert one uv.lock ``requires-dist``-style table to a normalized requirement."""
+  return Requirement(
+    name=normalize_name(str(entry["name"])),
+    extras=tuple(sorted(normalize_name(extra) for extra in entry.get("extras", ()))),
+    specifier=normalize_specifier(str(entry.get("specifier", ""))),
+    marker=entry.get("marker"),
+  )
 
 
 def project_metadata() -> dict[str, object]:
@@ -148,10 +192,65 @@ def run_isolated_python(
   return result
 
 
+def lockfile() -> dict[str, object]:
+  """Return the parsed committed uv.lock."""
+  return load_pyproject(ROOT / "uv.lock")
+
+
+def locked_packages(name: str) -> list[dict[str, object]]:
+  """Return every uv.lock package table for one distribution name."""
+  normalized = normalize_name(name)
+  return [
+    package for package in lockfile()["package"] if normalize_name(package["name"]) == normalized
+  ]
+
+
+def locked_package(name: str) -> dict[str, object]:
+  """Return the single uv.lock package table for a distribution, failing on ambiguity."""
+  packages = locked_packages(name)
+  assert len(packages) == 1, f"expected one locked {name} package, found {len(packages)}"
+  return packages[0]
+
+
+def locked_package_versions(name: str) -> list[str]:
+  """Return every locked version of one distribution (empty when it is not locked)."""
+  return [str(package["version"]) for package in locked_packages(name)]
+
+
+def release_tuple(version: str) -> tuple[int, ...]:
+  """Return the leading numeric release components of a version string."""
+  release = re.match(r"^\d+(?:\.\d+)*", version)
+  assert release is not None, f"unparsable version: {version!r}"
+  return tuple(int(part) for part in release.group(0).split("."))
+
+
+def exported_requirements(*extras: str) -> dict[str, str]:
+  """Export the locked non-dev runtime selection and return its pinned versions by name."""
+  extra_args = [argument for extra in extras for argument in ("--extra", extra)]
+  result = run_uv(
+    "export",
+    "--locked",
+    "--no-dev",
+    "--no-emit-local",
+    "--no-hashes",
+    "--no-header",
+    "--no-annotate",
+    *extra_args,
+  )
+  pins: dict[str, str] = {}
+  for line in result.stdout.splitlines():
+    requirement = line.split(";", maxsplit=1)[0].strip()
+    if not requirement or requirement.startswith(("#", "-")):
+      continue
+    name, separator, version = requirement.partition("==")
+    assert separator, f"unexpected export line: {line!r}"
+    pins[dependency_name(name)] = version.strip()
+  return pins
+
+
 def locked_versions() -> dict[str, str]:
   """Return workspace, PTB, SQLAlchemy, and Tornado versions from uv.lock."""
-  lock = load_pyproject(ROOT / "uv.lock")
-  locked = {package["name"]: package["version"] for package in lock["package"]}
+  locked = {package["name"]: package["version"] for package in lockfile()["package"]}
   names = (
     "stickfix-bot",
     "stickfix-domain",
