@@ -24,9 +24,9 @@ and uses [uv](https://docs.astral.sh/uv) for dependency management.
    ```
 
 2. **Create an environment file** from `.env.example` (never commit `.env`):
-   ```bash
+   ```powershell
    Copy-Item .env.example .env
-   # Set STICKFIX_TOKEN and POSTGRES_PASSWORD in .env
+   # Set STICKFIX_TOKEN and POSTGRES_PASSWORD in .env.
    ```
    Obtain your token from [@BotFather](https://t.me/botfather) on Telegram by sending `/newbot`.
 
@@ -38,6 +38,12 @@ and uses [uv](https://docs.astral.sh/uv) for dependency management.
 PostgreSQL is the runtime backend. The `migrate` service applies Alembic migrations
 before the bot starts; application mutations are committed immediately.
 
+> [!IMPORTANT]
+> The current `main` Docker image has unresolved packaging and runtime synchronization gaps.
+> Before relying on a production image, complete the container build/offline checks described
+> in [CONTRIBUTING.md](CONTRIBUTING.md#environment-selection-and-container-boundary) and
+> the open Phase D traceability plan.
+
 ## Core commands
 
 - `/add <tags...>` — Reply to a sticker to save it with one or more tags
@@ -48,132 +54,118 @@ before the bot starts; application mutations are committed immediately.
 - `/deleteMe` — Remove your stored data and user account
 - `/help` — Show usage instructions in Telegram
 
-## Running the Bot
+## Running the bot
 
 ### Prerequisites
 
-**Python 3.14 or newer** — Verify with `python --version` or install via
-[python.org](https://www.python.org/).
+**Python 3.14** — The project currently requires Python `>=3.14,<4`. Verify with
+`python --version` or select a managed interpreter with `uv python pin 3.14`.
 
-**uv** — Install globally: `python -m pip install --user uv` or follow
-[uv installation docs](https://docs.astral.sh/uv).
+**uv** — Install using the [official installation instructions](https://docs.astral.sh/uv/).
+Check the project's CI/Docker toolchain policy in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Telegram Bot Token** — Obtain from [@BotFather](https://t.me/botfather) on Telegram
-by sending `/newbot` and following the prompts.
+**Telegram bot token** — Obtain from [@BotFather](https://t.me/botfather).
 
-### Setup details
+### Setup
 
-1. **Configure the runtime environment** using `.env.example`. The required values are
-   `STICKFIX_TOKEN`, `POSTGRES_PASSWORD`, and (when running outside Compose)
-   `STICKFIX_DATABASE_URL`.
+Configure `.env.example` for Compose. Required values include `STICKFIX_TOKEN` and
+`POSTGRES_PASSWORD`. For non-Compose execution, configure `STICKFIX_DATABASE_URL` to point to
+a PostgreSQL database with the required schema.
 
-### Running
-
-Start the database and bot with:
 ```bash
 docker compose up --build
 ```
 
-On startup, the bot will:
-- Use PostgreSQL for sticker storage
-- Create `logs/stickfix.log` for application logs
-- Listen for commands and inline queries on Telegram
+The bot uses PostgreSQL for sticker storage, configures operational logging, and handles
+commands and inline queries through Telegram long polling. Press `Ctrl+C` to stop it.
 
-Press `Ctrl+C` to stop the bot gracefully.
+### Verify Telegram behavior
 
-### Verifying the Bot
-
-1. Open Telegram and search for your bot by username
-2. Send `/start` or `/help` to see available commands
-3. Try adding a sticker with `/add tag1 tag2` (reply to a sticker)
-4. Test inline queries by typing `@yourbotusername tag1` in any chat
+1. Open Telegram and search for the bot by username.
+2. Send `/start` or `/help` to see available commands.
+3. Reply to a sticker with `/add tag1 tag2`.
+4. Try an inline query such as `@yourbotusername tag1` in a chat.
 
 ### Runtime files
 
-The runtime creates and manages:
+- `logs/stickfix.log` — Application logs and diagnostic output.
+- The Compose `postgres-data` volume — Persistent PostgreSQL data.
 
-- `logs/stickfix.log` — Application logs and debug output
-- the Docker volume `postgres-data` — PostgreSQL data
-
-Historical YAML files are migration inputs only. Import a copy deliberately with:
+Historical YAML files are one-shot migration inputs only. To run the established importer:
 
 ```bash
-uv run python -m bot.infrastructure.migration.yaml_to_postgres --source data/users.yaml --dry-run
-uv run python -m bot.infrastructure.migration.yaml_to_postgres --source data/users.yaml --apply
+uv run --locked python -m bot.infrastructure.migration.yaml_to_postgres \
+  --source data/users.yaml --dry-run
+uv run --locked python -m bot.infrastructure.migration.yaml_to_postgres \
+  --source data/users.yaml --apply
 ```
 
 > [!WARNING]
-> `.env`, token files, and database credentials must never be committed to version control.
+> Never commit `.env`, token files, `secret.yml`, or database credentials.
 
 ## Architecture
 
-Dependencies point inward only: `handlers → use cases → ports ← infrastructure`.
-Domain and application code never import Telegram or SQLAlchemy.
+Dependencies point inward: `handlers → use cases → ports ← infrastructure`.
+Domain and application code remain independent of Telegram and SQLAlchemy.
 
-- **Interface** (`bot.handlers`, `bot.stickfix`) — parse Telegram updates, call a
-  use case, format replies. No business rules.
-- **Application** (`stickfix_application`, in `packages/stickfix-application/`) —
-  `requests` (input DTOs), `results` (output DTOs), `errors` (Telegram-free
-  failures), `use_cases` (one callable class per command), `ports` (outbound
-  `Protocol`s).
-- **Domain** (`stickfix_domain`, in `packages/stickfix-domain/`) — `StickfixUser`
-  and `StickerPackService` hold sticker/tag rules, pack selection, shuffle, and
-  cache behavior. `UserId` is a `NewType("UserId", int)`.
-- **Infrastructure** (`bot.infrastructure`) — adapters implementing the ports:
-  `persistence.postgres` (runtime), `help` (file provider), and `migration` (the
-  one-shot legacy YAML importer, never loaded at runtime).
-- Operational logging is configured in `bot.infrastructure.logging`; application
-  modules use Python's standard `logging` API without constructing file or
-  console handlers. The `stickfix_domain` package never imports `logging`.
+- **Interface** (`bot.handlers`, `bot.stickfix`) — Parse Telegram updates, call use cases,
+  and format replies.
+- **Application** (`stickfix_application`, in `packages/stickfix-application/`) — Requests,
+  results, errors, use cases, and `Protocol`-based ports.
+- **Domain** (`stickfix_domain`, in `packages/stickfix-domain/`) — Sticker and tag rules,
+  user/pack selection, shuffle behavior, and cache logic.
+- **Infrastructure** (`bot.infrastructure`) — PostgreSQL persistence, help-file access,
+  logging, and the historical YAML migration adapter.
 
-Persistence model:
-
-- `UserRepository` handles regular numeric users; the shared public pack has its own
-  `PublicPackRepository`. There is no synthetic `SF-PUBLIC` user id in the runtime
-  contracts (it survives only inside the legacy YAML reader).
-- `PostgresUserRepository` implements both ports and opens one transaction per
-  mutation, so a use case that returns success has already committed.
-- Migration-only bulk import and full-snapshot verification are owned by
-  `PostgresMigrationGateway`; they are not part of the runtime repository ports.
-- `/start`, `/add`, `/get`, `/deleteFrom`, `/setMode`, `/shuffle`, `/deleteMe`, and
-  inline queries all run through use cases; handlers keep only Telegram concerns.
+`PostgresUserRepository` implements the application repository ports and commits mutations
+transactionally. Historical YAML migration is separate from normal runtime storage.
 
 ## Development
 
 ### Environment setup
 
-1. Install `uv` globally (e.g., `python -m pip install --user uv` or see
-   [uv docs](https://docs.astral.sh/uv)).
-2. Pin Python 3.14 and create the locked environment (includes the default `dev` group):
-   ```bash
-   uv python pin 3.14
-   uv sync --locked
-   ```
-3. Change dependencies only as described in CONTRIBUTING.md's dependency metadata workflow, which
-   keeps `pyproject.toml` and `uv.lock` in step.
+Use Python 3.14 and the workspace lockfile:
+
+```bash
+uv python pin 3.14
+uv lock --check
+uv sync --all-packages --locked
+```
+
+The default `dev` dependency group installs testing and formatting tools. When changing any
+dependency declaration, update `uv.lock` with `uv lock` and commit both together.
 
 ### Common commands
 
 ```bash
 uv run --locked ruff check .
-uv run --locked ruff format .
+uv run --locked ruff format --check .
 uv run --locked pytest
+uv run --locked pytest -k logger
+```
+
+To select tests by expression, use `uv run --locked pytest -k <pattern>` and replace
+`<pattern>` with the expression to match.
+
+To start the bot directly (after configuring a token, database URL, and schema), use the
+existing module entrypoint:
+
+```bash
 uv run --locked python -m bot
 ```
 
-Run a subset of tests with `uv run --locked pytest -k <pattern>` (replace `<pattern>`).
-`python -m bot` needs a Telegram token (for example `STICKFIX_TOKEN`) and
-`STICKFIX_DATABASE_URL`.
+Use `uv run --locked python -m bot` as the supported module entrypoint. The `bot.stickfix`
+module provides runtime composition and is not a separate command-line entrypoint.
 
-### Advanced workflows
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full verification workflow, covering the
-workspace, packaging, the container, and CI. It also covers the optional extras, the dependency
-policy, and legacy tooling.
+For build-system requirements, the limits of `uv.lock`, wheel verification, CI jobs,
+PostgreSQL integration, and the pending workspace migration, consult
+[CONTRIBUTING.md](CONTRIBUTING.md#workspace-and-packaging-verification).
 
 ## Troubleshooting
 
-- **Import errors**: Run `uv sync --locked` to install the locked dependencies.
-- **Token errors**: Verify `STICKFIX_TOKEN` matches the token from BotFather.
-- **Database errors**: Verify `STICKFIX_DATABASE_URL` and that PostgreSQL is healthy.
-- **Bot not responding**: Check `logs/stickfix.log` for error messages.
+- **Import errors**: Run `uv sync --all-packages --locked` and check the selected interpreter.
+- **Token errors**: Verify `STICKFIX_TOKEN` matches the BotFather token.
+- **Database errors**: Verify `STICKFIX_DATABASE_URL`, PostgreSQL health, and migrations.
+- **Bot not responding**: Inspect the configured logs and Telegram polling state.
+- **Docker import failures**: Verify the image copies the Python 3.14 `imghdr.py` compatibility
+  module and that its runtime-only environment is installed before startup.

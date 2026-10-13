@@ -1,26 +1,29 @@
-# Build-backend ranges are resolved at build time and are not covered by uv.lock; see
-# CONTRIBUTING.md ("Workspace and packaging verification") for the reproducibility boundary.
+# PEP 517 builds resolve their isolated backend requirements separately from the
+# project's locked dependency selection. These lower bounds do not freeze build
+# backend versions; see CONTRIBUTING.md, "Build isolation and reproducibility".
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools>=66", "wheel>=0.40"]
 
 [project]
+name = "stickfix-bot"
+version = "0.1.0"
+description = "Telegram sticker tagging assistant that keeps sticker metadata searchable."
+readme = "README.md"
+requires-python = ">=3.14,<4"
 dependencies = [
   "stickfix-domain",
   "stickfix-application",
   "python-telegram-bot>=13.15,<14",
   "PyYAML>=6.0,<7",
-  "urllib3>=1.26,<1.27", # PTB 13 compat: upstream fallback (appengine); dependency_policy.py
-  "six>=1.17,<1.18", # PTB 13 compat: retained bound, needed by APScheduler; dependency_policy.py
+  # Retained PTB 13 compatibility bounds; see tests/architecture/dependency_policy.py.
+  "urllib3>=1.26,<1.27", # PTB 13 compat: urllib3 fallback; dependency_policy.py
+  "six>=1.17,<1.18", # PTB 13 compat: APScheduler dependency; dependency_policy.py
   "SQLAlchemy>=2.0.52,<3",
   "alembic>=1.19.1,<2",
   "psycopg[binary]>=3.2,<4",
 ]
-description = "Telegram sticker tagging assistant that keeps sticker metadata searchable."
-name = "stickfix-bot"
-readme = "README.md"
-requires-python = ">=3.14,<4"
-version = "0.1.0"
+
 [project.optional-dependencies]
 db = [
   "pgvector>=0.4.1,<0.5",
@@ -44,10 +47,11 @@ Homepage = "https://github.com/r8vnhill/stickfix"
 Repository = "https://github.com/r8vnhill/stickfix"
 
 [tool.setuptools]
+# PTB 13 imports imghdr, which is absent from Python 3.14's standard library.
 py-modules = ["imghdr"]
 
 [tool.setuptools.packages.find]
-# bot.handlers intentionally uses implicit namespace discovery (no __init__.py).
+# bot.handlers has no __init__.py; implicit namespace discovery is required.
 include = ["bot", "bot.*"]
 namespaces = true
 
@@ -68,16 +72,15 @@ norecursedirs = [
 ]
 
 [tool.uv]
-# PTB 13.15 pins tornado==6.1, but Stickfix starts via polling only and does
-# not expose PTB's Tornado webhook server path affected by CVE-2026-31958.
-# Replace this bounded override only during an approved PTB migration that
-# demonstrates equivalent behavior and no dependency-security regression.
-# Policy and boundary: tests/architecture/dependency_policy.py.
+# PTB 13.15 pins tornado==6.1; Stickfix uses polling only and does not expose
+# the Tornado webhook path associated with CVE-2026-31958.
+# Replace this override only during an approved PTB migration with equivalent
+# behavior and no dependency-security regression. See dependency_policy.py.
 override-dependencies = ["tornado>=6.5.5,<7"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
-stickfix-application = {workspace = true}
-stickfix-domain = {workspace = true}
+stickfix-application = { workspace = true }
+stickfix-domain = { workspace = true }
