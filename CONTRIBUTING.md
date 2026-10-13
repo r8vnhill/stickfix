@@ -13,14 +13,26 @@ environment. The sections below cover local setup, checks, optional extras, and 
 
 ## Lint & tests
 
-- `uv run ruff check` (and optionally `uv run ruff format`) replace the old
-  flake8/isort mix. `ruff.toml` sets `line-length = 100`.
+- `ruff.toml` is authoritative for lint and formatting: it targets Python 3.14,
+  uses two-space indentation, and sets `line-length = 100`. Run `uv run ruff check`
+  to lint, `uv run ruff format` to format, and `uv run ruff format --check` to verify.
 - `uv run pytest` runs the unit/handler suite inside the locked env; `-m integration`
   additionally needs a PostgreSQL database (see below).
 - Use targeted tests (e.g. `uv run pytest tests/handlers`) when touching command
   flows so handler-level coverage stays fast.
 - Add new tests next to the affected modules; keep the handler/command flows and the
   application/domain seams covered.
+- For local coverage, use:
+
+  ```bash
+  uv run pytest \
+    --cov=bot \
+    --cov=stickfix_application \
+    --cov=stickfix_domain \
+    --cov-report=term-missing
+  ```
+
+  Coverage has no threshold and is not collected or published by CI.
 
 ## Optional extras
 
@@ -68,20 +80,19 @@ When you add, remove, or move a dependency, update the policy and this table in 
 
 | Dependency | Classification | Declaration surface | Purpose |
 |---|---|---|---|
-| `stickfix-domain` | internal | `runtime` | Workspace member with Telegram-free user and sticker rules. |
-| `stickfix-application` | internal | `runtime` | Workspace member with transport-agnostic use cases, ports, and DTOs. |
-| `python-telegram-bot` | runtime | `runtime` | Approved synchronous Telegram framework baseline (PTB 13.15) used by handlers and startup. |
-| `pyyaml` | runtime | `runtime` | Reads historical YAML data for the documented one-shot PostgreSQL migration. |
-| `sqlalchemy` | runtime | `runtime` | PostgreSQL runtime persistence models, sessions, and repositories. |
-| `alembic` | runtime | `runtime` | PostgreSQL schema migrations under alembic/. |
-| `psycopg` | runtime | `runtime` | PostgreSQL driver loaded by SQLAlchemy through the postgresql+psycopg URL dialect. |
-| `urllib3` | compatibility | `runtime` | PTB 13 falls back to upstream urllib3 1.26.x (with urllib3.contrib.appengine) when its vendored copy cannot load on Python 3.14. |
-| `six` | compatibility | `runtime` | Retained legacy bound; also required transitively by PTB 13's APScheduler. Revisit during PTB modernization. |
-| `tornado` | compatibility | `override` | Overrides PTB 13.15's tornado==6.1 pin with patched 6.x (CVE-2026-31958); acceptable because Stickfix starts by polling only. |
-| `pgvector` | optional | `extra:db` | Published db extra providing pgvector support; not required by Stickfix persistence. |
-| `neo4j` | optional | `extra:graph` | Published graph extra supplying the supported Neo4j 6.x Python driver; no project code uses it yet. |
+| `stickfix-domain` | internal | `runtime` | Telegram-free user and sticker rules. |
+| `stickfix-application` | internal | `runtime` | Transport-agnostic use cases, ports, and DTOs. |
+| `python-telegram-bot` | runtime | `runtime` | PTB 13.15 synchronous Telegram framework. |
+| `pyyaml` | runtime | `runtime` | Historical YAML import for one-shot PostgreSQL migration. |
+| `sqlalchemy` | runtime | `runtime` | PostgreSQL persistence models, sessions, and repositories. |
+| `alembic` | runtime | `runtime` | PostgreSQL schema migrations. |
+| `psycopg` | runtime | `runtime` | PostgreSQL driver loaded through SQLAlchemy's dialect. |
+| `urllib3` | compatibility | `runtime` | PTB 13's Python 3.14 urllib3 fallback. |
+| `six` | compatibility | `runtime` | Transitive PTB 13 APScheduler requirement. |
+| `tornado` | compatibility | `override` | Patched PTB 13.15 Tornado override for polling. |
+| `pgvector` | optional | `extra:db` | Optional database vector support. |
+| `neo4j` | optional | `extra:graph` | Optional graph driver; currently unused. |
 | `hypothesis` | development | `dev` | Property-based tests. |
-| `pre-commit` | development | `dev` | Local git hook runner. |
 | `pyhamcrest` | development | `dev` | Matcher-style test assertions. |
 | `pytest` | development | `dev` | Test runner. |
 | `pytest-bdd` | development | `dev` | Gherkin scenarios for BDD tests. |
@@ -93,6 +104,10 @@ Classifications describe why a dependency exists; the declaration surface says w
 Compatibility entries are legacy PTB 13 constraints with an approved version boundary and a
 verification test. The Tornado override is replaced only during an approved PTB migration that
 demonstrates equivalent behavior and no dependency-security regression.
+
+PTB 13 can fall back to upstream urllib3 1.26.x on Python 3.14 when its vendored copy fails;
+APScheduler needs `six` transitively. The Tornado override replaces PTB 13.15's 6.1 pin with
+patched 6.x (CVE-2026-31958), which is acceptable while Stickfix starts by polling only.
 
 <!-- dependency-policy:end -->
 

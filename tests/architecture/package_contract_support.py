@@ -10,13 +10,13 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 import zipfile
 from dataclasses import dataclass
 from email.parser import BytesParser
 from email.policy import default
 from pathlib import Path
 
-import tomllib
 from conftest import ROOT
 from dependency_policy import DependencyClass, dev_dependencies, names_in
 

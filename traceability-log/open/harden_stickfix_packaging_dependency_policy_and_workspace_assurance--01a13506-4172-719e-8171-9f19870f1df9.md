@@ -281,93 +281,121 @@ policy's source of truth, mirrored by a human-readable table in `CONTRIBUTING.md
 
 ---
 
-## Phase C — Align development tooling with Python 3.14
+## Phase C — Align development tooling with Python 3.14 [DONE]
 
-**Priority:** High-value maintenance; schedule independently of active namespace refactors.
+**Status:** Complete as of 2026-10-13.
 
-### Goal
+**Goal:** Upgrade development tooling for Python 3.14 while preserving runtime behavior,
+test semantics, architecture contracts, and the runtime dependency graph.
 
-Use a coherent Python 3.14 tooling baseline with consistent formatting, compatible test dependencies, and explicit lint policy.
+### Maintainer decisions
 
-### Scope
+- Use two-space indentation for Python, matching Ruff's existing setting. This explicit
+  project decision overrides the four-space recommendation in general review guidelines;
+  it does not change those guidelines for other projects.
+- Upgrade dependencies by the groups below and review each lockfile delta before continuing.
+- Remove the unused `pre-commit` package without adding replacement hook tooling.
+- Validate coverage locally; do not add CI coverage collection, thresholds, or uploads.
+- Keep pytest and pytest-bdd, Hypothesis and PyHamcrest, Ruff rules and existing F401/F403
+  suppressions. Do not add type checking or broad Python syntax modernization.
+- Keep CI's test command and PostgreSQL job topology unchanged. Existing PostgreSQL CI is
+  the authority for database integration verification.
 
-- `ruff.toml`
-- `.editorconfig`
-- `[dependency-groups].dev`
-- `uv.lock`
-- Python source and test formatting
-- CI quality checks
+### Cycle C.1 — Establish baseline and remove pre-commit
 
-### Cycle C.1 — Align Ruff target and formatting
+**Baseline evidence, 2026-10-13:** Python 3.14.7, pytest 7.4.4, pytest-bdd 7.3.0,
+pytest-cov 4.1.0, coverage 7.11.2, Hypothesis 6.148.0, PyHamcrest 2.1.0, and Ruff 0.14.4.
+Collection found 200 tests; the full suite passed 197 with 3 expected skips and two existing
+warnings (PTB's upstream urllib3 notice and APScheduler's `pkg_resources` deprecation).
+All 85 architecture tests passed. Coverage collection succeeded for `bot`,
+`stickfix_application`, and `stickfix_domain` with 79% total coverage and no threshold.
+Ruff lint passed and 92 Python files were already formatted. The first Hypothesis logger
+property-test run exceeded its deadline during cold startup, then passed on immediate rerun.
+The baseline uses an external temporary uv environment because active IDE processes hold
+handles in the project's `.venv`; `uv sync --locked` succeeded there.
 
-**Red**
+**Change:** Remove pre-commit from the dev group, executable policy, and contributor table.
+Reuse the removed-dependency policy test to ensure it stays absent from declarations and the
+lock. Keep other declared development tools unchanged.
 
-Add a configuration contract:
+**Verification:** The new absence assertion failed before the removal, then the dependency
+policy suite passed (59 tests) after lock regeneration. uv removed pre-commit and its
+unneeded `cfgv`, `distlib`, `filelock`, `identify`, `nodeenv`, `platformdirs`, and `virtualenv`
+packages; unrelated dependencies were retained. The full suite then passed at its baseline:
+197 passed, 3 skipped, and the same two existing warnings.
 
-> Given the Python 3.14 project baseline, when repository tooling configuration is inspected, then the language target and indentation policy agree.
+### Cycle C.2 — Upgrade pytest and pytest-bdd together
 
-Require:
+Review current stable releases and migration notes. Update only their version ranges, upgrade
+both with targeted lock operations, and preserve Gherkin scenarios, scenario names, fixture
+lifecycle, markers, and test discovery. Verify logger BDD scenarios and the full suite before
+continuing.
 
-```toml
-target-version = "py314"
-indent-width = 4
-```
+**Selected versions:** pytest 9.1.1 and pytest-bdd 9.0.0. Logger BDD tests passed (6 tests),
+and collection stayed at 200 tests with the same scenario IDs. The first full run had one
+known cold-filesystem Hypothesis deadline flake, also observed before the upgrade; the test was
+rerun and passed. Its specific fix is recorded in Cycle C.4.
 
-**Green**
+### Cycle C.3 — Upgrade pytest-cov and coverage
 
-Update Ruff configuration and apply the minimum formatting changes necessary for repository-wide consistency.
+Review compatibility and update pytest-cov with its coverage backend as one group. Validate
+local collection and reporting for `bot`, `stickfix_application`, and `stickfix_domain`.
+Keep coverage data outside tracked files where practical; do not set a percentage threshold or
+change CI.
 
-Use the formatter rather than introducing a separate formatting tool.
+**Selected versions:** pytest-cov 7.1.0 and coverage 7.16.2. The final local coverage run
+collected all three packages and reported 79% overall coverage; 198 tests passed, 3 were skipped,
+and the two baseline warnings remained.
 
-**Refactor**
+### Cycle C.4 — Review Hypothesis and PyHamcrest
 
-Keep the resulting formatting-only changes isolated from semantic changes and package moves.
+Evaluate the latest suitable Hypothesis release independently and upgrade it only after its
+property tests pass. Review PyHamcrest separately; retain its current release unless a newer
+compatible release has a concrete benefit or fixes an observed issue. Preserve generator domains,
+property meanings, and matcher assertions.
 
-Review broad unused-import suppressions, including `F401` and `F403`, but retain them until affected source files are characterized.
+**Selected versions:** Hypothesis 6.169.0; PyHamcrest remains at 2.1.0 because it is the latest
+published release and existing matcher tests pass. The logger property test's first filesystem
+operation can exceed Hypothesis's default 200 ms deadline in this environment, including before
+Phase C. With maintainer approval, that one test now sets `deadline=None`; its strategy and
+assertions are unchanged. The logger and handler suites pass (31 tests).
 
-### Cycle C.2 — Modernize testing dependencies
+### Cycle C.5 — Align Ruff and EditorConfig
 
-**Red**
+Set Ruff's target to `py314`, retain `indent-width = 2`, and change Python's EditorConfig
+indent size to 2. Preserve line length, lint selections, security exceptions, and F401/F403
+suppressions. Upgrade Ruff independently, review formatter and rule changes, and apply only
+behavior-preserving formatting. Record the two-space decision above before changing EditorConfig.
 
-Establish the current baseline for:
+**Selected version:** Ruff 0.17.0. Its minimum declared version is now 0.17 so all permitted
+versions support the configured target. A small architecture test checks Python target and
+indentation agreement. The upgrade exposed one import-order violation in a shared test helper;
+that standard-library import was reordered. Ruff lint passes and all 95 Python files are formatted.
 
-- Unit and BDD tests.
-- Architecture and package metadata tests.
-- Isolated wheel-import tests.
-- PostgreSQL integration tests.
-- Coverage collection.
+### Final verification and acceptance
 
-**Green**
+- Run `uv lock --check`, `uv sync --locked`, Ruff lint and format checks, focused BDD and
+  architecture tests, and the full pytest suite after all groups.
+- Repeat local coverage collection; require successful reports for the three project packages,
+  without a numeric threshold.
+- Keep root, domain, and application wheel metadata/content and isolated-installation checks
+  passing; verify all three builds.
+- Confirm PostgreSQL migrations, schema checks, and integration tests in the existing CI job
+  against its configured disposable database. A local skip is not integration evidence.
+- Compare test counts, node IDs, skips, xfails, and warnings with the recorded baseline. Explain
+  any changes and resolve unexplained regressions before closing Phase C.
+- Keep runtime requirements, optional extras, workspace edges, Tornado override, application
+  APIs, bot behavior, persistence, and CI topology unchanged.
 
-Evaluate updates in small compatible groups:
+**Final verification, 2026-10-13:** `uv lock --check` passes. The full suite passes with 198
+passed and 3 skipped; the two warnings match the baseline. Local coverage succeeds with 79%
+overall and includes all three project packages. Domain, application, and bot distributions
+build successfully. A disposable PostgreSQL 18.6 instance applied migrations, passed
+`alembic check`, and passed all four integration tests. CI configuration and job topology are
+unchanged.
 
-1. pytest and pytest-bdd.
-2. pytest-cov and its coverage backend.
-3. pre-commit and other development utilities where an active use case exists.
-4. Compatible Ruff and Hypothesis maintenance releases.
-
-Prefer the latest appropriate stable versions that pass the repository's tests. Do not upgrade every dependency in one unreviewable lockfile change.
-
-**Refactor**
-
-Remove redundant dependency declarations and obsolete workarounds demonstrated unnecessary by tests.
-
-### Acceptance criteria
-
-- Python 3.14 remains the authoritative language baseline.
-- Ruff and EditorConfig agree.
-- Lint and formatting checks pass.
-- BDD scenarios and fixtures retain their behavior.
-- Coverage collection works after any approved tooling upgrade.
-- No runtime dependency change is introduced through the development group.
-- Formatting changes are independently reviewable.
-
-### Non-goals
-
-- New type-checking infrastructure.
-- Rewriting tests around a new testing framework.
-- Applying newer Python syntax across the repository merely for stylistic reasons.
-- Changing domain or application APIs.
+Do not run an unrestricted `uv lock --upgrade`; use targeted package upgrades and review each
+complete lockfile diff. Commit dependency declarations and their matching lock together.
 
 ---
 

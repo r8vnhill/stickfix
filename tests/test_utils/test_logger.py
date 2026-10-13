@@ -16,6 +16,7 @@ from typing import Callable, List
 
 import pytest
 from hypothesis import given as hypothesis_given
+from hypothesis import settings as hypothesis_settings
 from hypothesis import strategies as st
 from pytest_bdd import given as bdd_given
 from pytest_bdd import parsers, scenarios
@@ -127,6 +128,7 @@ def assert_log_file_created(logger_state: LoggerState) -> None:
   assert logger_state.config.log_path.exists()
 
 
+@hypothesis_settings(deadline=None)
 @hypothesis_given(
   segments=st.lists(
     st.text(alphabet=string.ascii_lowercase + string.digits, min_size=1, max_size=8),
@@ -135,6 +137,7 @@ def assert_log_file_created(logger_state: LoggerState) -> None:
   )
 )
 def test_logger_creates_nested_paths(segments: List[str]) -> None:
+  """Filesystem latency is variable, so the default timing deadline is not meaningful here."""
   with TemporaryDirectory() as tmp_dir:
     base = Path(tmp_dir)
     directory_segments = segments[:-1]
