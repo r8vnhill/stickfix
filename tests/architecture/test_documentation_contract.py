@@ -88,11 +88,15 @@ def test_agents_requires_container_and_wheel_assurance_for_package_changes() -> 
   assert "test_root_distribution.py" in text
 
 
-def test_pyproject_compatibility_comment_introduces_the_ptb_constraints() -> None:
-  """The PTB compatibility comment is not attached to the unrelated PyYAML requirement."""
-  lines = document("pyproject.toml").splitlines()
-  pyyaml = next(line for line in lines if line.strip().startswith('"PyYAML'))
-  urllib3 = next(index for index, line in enumerate(lines) if line.strip().startswith('"urllib3'))
+def test_pyproject_compatibility_comments_stay_on_the_ptb_constraints() -> None:
+  """PTB pins carry their own trailing comments; nothing is attached to the PyYAML requirement.
 
-  assert "#" not in pyyaml
-  assert "PTB 13 compatibility constraints" in lines[urllib3 - 1]
+  TOML formatters attach a standalone comment inside an array to the previous element, so each
+  compatibility pin explains itself on its own line instead of under a shared heading comment.
+  """
+  lines = [line.strip() for line in document("pyproject.toml").splitlines()]
+  comments = {line.split('"')[1].split(">")[0]: line for line in lines if line.startswith('"')}
+
+  assert "#" not in comments["PyYAML"]
+  for pin in ("urllib3", "six"):
+    assert "PTB 13 compat" in comments[pin] and "dependency_policy.py" in comments[pin]

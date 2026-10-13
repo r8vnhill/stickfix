@@ -9,9 +9,9 @@ dependencies = [
   "stickfix-domain",
   "stickfix-application",
   "python-telegram-bot>=13.15,<14",
-  "PyYAML>=6.0,<7", # PTB 13 compatibility constraints; see tests/architecture/dependency_policy.py.
-  "urllib3>=1.26,<1.27", # PTB 13's upstream-urllib3 fallback (needs contrib.appengine).
-  "six>=1.17,<1.18", # Retained legacy bound; also required by PTB 13's APScheduler.
+  "PyYAML>=6.0,<7",
+  "urllib3>=1.26,<1.27", # PTB 13 compat: upstream fallback (appengine); dependency_policy.py
+  "six>=1.17,<1.18", # PTB 13 compat: retained bound, needed by APScheduler; dependency_policy.py
   "SQLAlchemy>=2.0.52,<3",
   "alembic>=1.19.1,<2",
   "psycopg[binary]>=3.2,<4",
