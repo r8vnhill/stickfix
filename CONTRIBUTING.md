@@ -40,17 +40,22 @@ uv run alembic check
 
 ### Graph database support
 
-To work with Neo4j drivers:
+The `graph` extra installs the Neo4j 6.x Python driver (`neo4j`), the only supported
+graph driver:
 ```bash
 uv sync --extra graph
 ```
 
-### All published extras including development tools
+### Extras versus the development group
 
-For comprehensive dependency graph including testing, type checking, and CI helpers:
+Extras (`db`, `graph`) are published optional features: consumers select them with
+`stickfix-bot[db]`, and locally with `--extra`. Development tools live in the `dev`
+dependency group instead, which `uv sync` includes by default and which is never published.
+The two selections are independent, so this installs every extra *and* the dev tools:
 ```bash
 uv sync --all-extras
 ```
+Add `--no-dev` to get a runtime-only environment with every extra.
 
 ## Dependency metadata workflow
 

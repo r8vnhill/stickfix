@@ -167,13 +167,6 @@ POLICY: tuple[DependencyPolicy, ...] = (
     ImportMode.NOT_APPLICABLE,
   ),
   DependencyPolicy(
-    "neo4j-driver",
-    DependencyClass.OPTIONAL,
-    EXTRA_GRAPH,
-    "Legacy Neo4j 5.x distribution overlapping the neo4j namespace; pending removal in B.2.",
-    ImportMode.NOT_APPLICABLE,
-  ),
-  DependencyPolicy(
     "hypothesis",
     DependencyClass.DEVELOPMENT,
     DEV,

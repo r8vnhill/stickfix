@@ -17,6 +17,7 @@ from typing import NoReturn
 import pytest
 from dependency_policy import (
   DEV,
+  EXTRA_GRAPH,
   OVERRIDE,
   POLICY,
   RUNTIME,
@@ -24,6 +25,7 @@ from dependency_policy import (
   DependencyClass,
   DependencyPolicy,
   ImportMode,
+  extra_dependencies,
   policy_for,
 )
 from import_graph_support import PackageBoundary, import_edges, python_modules
@@ -32,6 +34,7 @@ from package_contract_support import (
   Requirement,
   application_metadata,
   domain_metadata,
+  exported_requirements,
   locked_package,
   locked_package_versions,
   locked_requirement,
@@ -44,7 +47,14 @@ from package_contract_support import (
 
 PATCHED_TORNADO_MINIMUM = (6, 5, 5)
 NEXT_TORNADO_MAJOR = (7, 0, 0)
-REMOVED_DEPENDENCIES = ("coloredlogs",)
+REMOVED_DEPENDENCIES = ("coloredlogs", "neo4j-driver")
+OPTIONAL_INTEGRATIONS = frozenset({"neo4j", "neo4j-driver", "pgvector"})
+EXTRA_SELECTIONS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
+  ((), frozenset()),
+  (("graph",), frozenset({"neo4j"})),
+  (("db",), frozenset({"pgvector"})),
+  (("graph", "db"), frozenset({"neo4j", "pgvector"})),
+)
 LOCAL_TOP_LEVEL_MODULES = {"imghdr"}
 PRODUCTION_ROOTS: dict[str, tuple[PackageBoundary, ...]] = {
   "stickfix-bot": (
@@ -387,3 +397,40 @@ def test_locked_override_matches_the_declared_override() -> None:
 
   assert overrides == {parse_requirement(requirement) for requirement in declared}
   assert policy_for("tornado", OVERRIDE).dependency_class is DependencyClass.COMPATIBILITY
+
+
+# --- Optional extras --------------------------------------------------------------------------
+
+
+def test_graph_extra_is_supplied_by_exactly_one_neo4j_distribution() -> None:
+  """Given the graph extra, Neo4j 6.x is supplied by exactly one distribution."""
+  declared = named_dependencies(project_metadata()["project"]["optional-dependencies"]["graph"])
+  (locked,) = locked_package_versions("neo4j")
+
+  assert declared == {"neo4j"}
+  assert extra_dependencies("graph") == declared
+  assert policy_for("neo4j", EXTRA_GRAPH).dependency_class is DependencyClass.OPTIONAL
+  assert locked_package_versions("neo4j-driver") == []
+  assert (6,) <= release_tuple(locked) < (7,)
+  for distribution in PRODUCTION_ROOTS:
+    assert "neo4j" not in production_top_level_imports(distribution), distribution
+
+
+@pytest.mark.parametrize(
+  ("extras", "required"),
+  EXTRA_SELECTIONS,
+  ids=["default", "graph", "db", "graph+db"],
+)
+def test_extra_selection_installs_only_its_integrations(
+  extras: tuple[str, ...], required: frozenset[str]
+) -> None:
+  """Given an extra selection, the locked export contains exactly its optional integrations."""
+  exported = exported_requirements(*extras)
+  runtime = {
+    entry.name for entry in POLICY if entry.surface == RUNTIME and entry.name not in WORKSPACE_GRAPH
+  }
+
+  assert runtime <= set(exported)
+  assert set(exported) & OPTIONAL_INTEGRATIONS == required
+  if "neo4j" in required:
+    assert exported["neo4j"] == locked_package_versions("neo4j")[0]

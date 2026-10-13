@@ -229,18 +229,6 @@ wheels = [
 ]
 
 [[package]]
-name = "neo4j-driver"
-version = "5.28.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pytz" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/f7/5555a7f342e2105068356a2efd0d9ca6ca425d010fb2549028c002d09089/neo4j_driver-5.28.2.tar.gz", hash = "sha256:decb08428dfb79c98e21966ec700cbfc81f66f1eda292e00316c5bba65fc8310", size = 232048, upload-time = "2025-07-30T06:04:33.505Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ae/6c/81959fa5d3f1f2984ceedb90d169b7fb04d6ac881af42a65c941d13841ea/neo4j_driver-5.28.2-py3-none-any.whl", hash = "sha256:c35230a499893608750a3a8c40bb477ab5b219e115cd78366e64bbbff6a2e270", size = 313377, upload-time = "2025-07-30T06:04:29.279Z" },
-]
-
-[[package]]
 name = "nodeenv"
 version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -601,7 +589,6 @@ db = [
 ]
 graph = [
     { name = "neo4j" },
-    { name = "neo4j-driver" },
 ]
 
 [package.dev-dependencies]
@@ -619,7 +606,6 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.19.1,<2" },
     { name = "neo4j", marker = "extra == 'graph'", specifier = ">=6.0,<7.0" },
-    { name = "neo4j-driver", marker = "extra == 'graph'", specifier = ">=5.0,<6.0" },
     { name = "pgvector", marker = "extra == 'db'", specifier = ">=0.4.1,<0.5" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "python-telegram-bot", specifier = ">=13.15,<14" },
