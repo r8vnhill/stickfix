@@ -1,13 +1,8 @@
 [build-system]
-requires = ["setuptools>=66", "wheel>=0.40"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools>=66", "wheel>=0.40"]
 
 [project]
-name = "stickfix-bot"
-version = "0.1.0"
-description = "Telegram sticker tagging assistant that keeps sticker metadata searchable."
-readme = "README.md"
-requires-python = ">=3.14,<4"
 dependencies = [
   "stickfix-domain",
   "stickfix-application",
@@ -20,6 +15,11 @@ dependencies = [
   "alembic>=1.19.1,<2",
   "psycopg[binary]>=3.2,<4",
 ]
+description = "Telegram sticker tagging assistant that keeps sticker metadata searchable."
+name = "stickfix-bot"
+readme = "README.md"
+requires-python = ">=3.14,<4"
+version = "0.1.0"
 [project.optional-dependencies]
 db = [
   "pgvector>=0.4.1,<0.5",
@@ -48,23 +48,24 @@ Repository = "https://github.com/r8vnhill/stickfix"
 py-modules = ["imghdr"]
 
 [tool.setuptools.packages.find]
-include = ["bot"]
-exclude = ["tests", "data", "logs"]
+# bot.handlers intentionally uses implicit namespace discovery (no __init__.py).
+include = ["bot", "bot.*"]
+namespaces = true
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: tests requiring an explicitly configured external service",
+  "integration: tests requiring an explicitly configured external service",
 ]
 norecursedirs = [
-    ".git",
-    ".hypothesis",
-    ".pytest-tmp",
-    ".pytest_cache",
-    ".venv",
-    "data",
-    "logs",
-    "venv",
-    "worktmp",
+  ".git",
+  ".hypothesis",
+  ".pytest-tmp",
+  ".pytest_cache",
+  ".venv",
+  "data",
+  "logs",
+  "venv",
+  "worktmp",
 ]
 
 [tool.uv]
@@ -77,6 +78,5 @@ override-dependencies = ["tornado>=6.5.5,<7"]
 members = ["packages/*"]
 
 [tool.uv.sources]
-stickfix-domain = { workspace = true }
-stickfix-application = { workspace = true }
-
+stickfix-application = {workspace = true}
+stickfix-domain = {workspace = true}
