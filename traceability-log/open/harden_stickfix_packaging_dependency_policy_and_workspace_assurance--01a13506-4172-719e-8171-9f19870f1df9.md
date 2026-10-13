@@ -110,7 +110,7 @@ Share reusable artifact helpers across the three existing package-contract suite
 
 ---
 
-## Phase B — Make dependency policy explicit and verifiable
+## Phase B — Make dependency policy explicit and verifiable [DONE]
 
 **Priority:** Required assurance and high-value dependency cleanup.
 
@@ -122,7 +122,7 @@ Ensure dependencies have a documented purpose, optional feature installations ar
 
 - `pyproject.toml`
 - `uv.lock`
-- `tests/test_dependency_policy.py`
+- `tests/test_dependency_policy.py` (relocated to `tests/architecture/`; see outcome)
 - `tests/architecture/test_package_metadata.py`
 - Relevant dependency documentation
 
@@ -208,6 +208,76 @@ Avoid duplicating version boundaries across multiple tests where a shared policy
 - Removing established public extras.
 - Adding unused graph infrastructure.
 - Independently versioning workspace packages.
+
+### Outcome (2026-10-13)
+
+**Maintainer decisions applied:** keep only `neo4j>=6,<7` in `graph`; remove `coloredlogs`;
+keep the `urllib3`, `six`, and Tornado constraints; make a typed Python table in test support the
+policy's source of truth, mirrored by a human-readable table in `CONTRIBUTING.md`.
+
+**B.1 — Executable policy.**
+
+- `tests/architecture/dependency_policy.py` classifies every declared dependency:
+  - classification: internal, runtime, compatibility, development, or optional.
+  - declaration surface: `runtime`, `dev`, `extra:<name>`, or `override`.
+  - import mode: direct, dynamic, transitive compatibility, or not applicable.
+  - justification, plus a verification test for compatibility-sensitive entries.
+- `tests/architecture/test_dependency_policy.py` checks the policy against several sources:
+  - declarations on each surface.
+  - the recorded workspace graph.
+  - production import ownership, from an AST scan of `bot/`, `alembic/`, and `packages/*/src`.
+  - the cited evidence tests.
+  - `uv.lock` root metadata: `requires-dist`, `requires-dev`, the dependency edges, and the
+    manifest override.
+- `coloredlogs` was declared but never imported. It was removed, and the lock also dropped the now
+  orphaned `humanfriendly` and `pyreadline3`.
+- `tests/test_dependency_policy.py` was moved with `git mv` to
+  `tests/architecture/test_dependency_policy.py`, so it can share the architecture helpers. That
+  directory has no `__init__.py` and resolves `conftest` locally.
+- The AST scanner was extracted, unchanged, into `tests/architecture/import_graph_support.py`.
+- Lockfile parsing now uses one `tomllib` implementation (`lockfile()`,
+  `locked_package_versions()`).
+- Dev and optional dependency names are derived from the policy instead of hard-coded.
+
+**B.2 — Neo4j.**
+
+- `neo4j-driver` 5.x was removed. It shipped the same `neo4j` import package as `neo4j` 6.x, and
+  no project code imports either.
+- A data-driven check of locked exports covers the default, `graph`, `db`, and `graph+db`
+  selections.
+- Smoke installations in a disposable environment confirmed:
+  - `--extra graph` installs only `neo4j` 6.0.3.
+  - `--extra db` installs `pgvector` 0.4.1 and no `neo4j`.
+
+**B.3 — Compatibility boundaries.**
+
+- PTB, `urllib3`, `six`, and Tornado each carry one `VersionBoundary`. Tests check that the
+  declared specifier, the single locked release, and the installed release all fall within it.
+- Each compatibility pin is covered by a behavioral test:
+  - `urllib3.contrib.appengine` must import.
+  - the lock must still record `python-telegram-bot → apscheduler → six`.
+  - psycopg must resolve through SQLAlchemy's `postgresql+psycopg` dialect.
+- The Tornado entry records the polling-only assumption and the removal condition.
+  `tests/test_startup_contract.py` still covers polling-only startup.
+- A delimited `CONTRIBUTING.md` table is checked against the policy for:
+  - names and surfaces.
+  - classification.
+  - purpose text.
+  A deliberate classification change in the doc made the test fail.
+
+**Verified assumptions.**
+
+- `six` is not imported by project code. It reaches the environment through PTB 13.15 →
+  APScheduler 3.6.3, so its direct declaration is a retained bound, not an observed import need.
+  This is inferred from the lock graph.
+- PTB 13.15 logs that it is "using upstream urllib3" on Python 3.14, which confirms the fallback
+  path that the `urllib3` 1.26.x pin supports.
+
+**Evidence.**
+
+- `uv lock --check` passes.
+- `ruff check` and `ruff format --check` are clean.
+- `pytest`: 197 passed, 3 skipped. The baseline before Phase B was 140 passed, 3 skipped.
 
 ---
 
@@ -434,11 +504,11 @@ Phase D integrates the accepted changes and establishes the baseline for subsequ
 
 Before implementation, resolve these choices:
 
-1. **Neo4j:** Retain only the modern driver (recommended), preserve the legacy driver temporarily with a documented compatibility requirement, or defer graph-extra changes.
+1. **Neo4j:** *Decided 2026-10-13 — retain only the modern driver (done in Phase B).* Retain only the modern driver (recommended), preserve the legacy driver temporarily with a documented compatibility requirement, or defer graph-extra changes.
 2. **Test tooling:** Upgrade immediately after distribution correction (recommended if compatibility tests pass), or retain the existing versions until Milestone 4 is complete.
 3. **Formatting:** Adopt four-space formatting in an isolated change (recommended), with timing coordinated against package moves.
 4. **Build reproducibility:** Retain the current setuptools backend and establish stronger artifact verification first (recommended), evaluating alternative backends only after Milestone 4.
-5. **Legacy runtime dependencies:** Preserve documented compatibility pins until the PTB migration, rather than removing them solely because application code does not import them directly.
+5. **Legacy runtime dependencies:** *Applied in Phase B — compatibility pins kept and verified; unused `coloredlogs` removed by maintainer decision.* Preserve documented compatibility pins until the PTB migration, rather than removing them solely because application code does not import them directly.
 
 ## Completion definition
 

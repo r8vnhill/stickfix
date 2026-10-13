@@ -57,6 +57,45 @@ uv sync --all-extras
 ```
 Add `--no-dev` to get a runtime-only environment with every extra.
 
+<!-- dependency-policy:start -->
+
+## Dependency policy
+
+Every declared dependency has one entry in the executable policy at
+`tests/architecture/dependency_policy.py`. `tests/architecture/test_dependency_policy.py`
+checks that policy against `pyproject.toml`, `uv.lock`, production imports, and this table.
+When you add, remove, or move a dependency, update the policy and this table in the same change.
+
+| Dependency | Classification | Declaration surface | Purpose |
+|---|---|---|---|
+| `stickfix-domain` | internal | `runtime` | Workspace member with Telegram-free user and sticker rules. |
+| `stickfix-application` | internal | `runtime` | Workspace member with transport-agnostic use cases, ports, and DTOs. |
+| `python-telegram-bot` | runtime | `runtime` | Approved synchronous Telegram framework baseline (PTB 13.15) used by handlers and startup. |
+| `pyyaml` | runtime | `runtime` | Reads historical YAML data for the documented one-shot PostgreSQL migration. |
+| `sqlalchemy` | runtime | `runtime` | PostgreSQL runtime persistence models, sessions, and repositories. |
+| `alembic` | runtime | `runtime` | PostgreSQL schema migrations under alembic/. |
+| `psycopg` | runtime | `runtime` | PostgreSQL driver loaded by SQLAlchemy through the postgresql+psycopg URL dialect. |
+| `urllib3` | compatibility | `runtime` | PTB 13 falls back to upstream urllib3 1.26.x (with urllib3.contrib.appengine) when its vendored copy cannot load on Python 3.14. |
+| `six` | compatibility | `runtime` | Retained legacy bound; also required transitively by PTB 13's APScheduler. Revisit during PTB modernization. |
+| `tornado` | compatibility | `override` | Overrides PTB 13.15's tornado==6.1 pin with patched 6.x (CVE-2026-31958); acceptable because Stickfix starts by polling only. |
+| `pgvector` | optional | `extra:db` | Published db extra providing pgvector support; not required by Stickfix persistence. |
+| `neo4j` | optional | `extra:graph` | Published graph extra supplying the supported Neo4j 6.x Python driver; no project code uses it yet. |
+| `hypothesis` | development | `dev` | Property-based tests. |
+| `pre-commit` | development | `dev` | Local git hook runner. |
+| `pyhamcrest` | development | `dev` | Matcher-style test assertions. |
+| `pytest` | development | `dev` | Test runner. |
+| `pytest-bdd` | development | `dev` | Gherkin scenarios for BDD tests. |
+| `pytest-cov` | development | `dev` | Coverage collection. |
+| `ruff` | development | `dev` | Linting and formatting. |
+
+Classifications describe why a dependency exists; the declaration surface says where
+`pyproject.toml` declares it (`runtime`, `dev`, `extra:<name>`, or the `[tool.uv]` `override`).
+Compatibility entries are legacy PTB 13 constraints with an approved version boundary and a
+verification test. The Tornado override is replaced only during an approved PTB migration that
+demonstrates equivalent behavior and no dependency-security regression.
+
+<!-- dependency-policy:end -->
+
 ## Dependency metadata workflow
 
 When the dependency graph changes (new package, extra, or version constraint):

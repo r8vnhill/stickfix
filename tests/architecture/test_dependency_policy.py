@@ -8,6 +8,7 @@ resolutions, production imports, and the compatibility evidence it cites.
 from __future__ import annotations
 
 import ast
+import importlib
 import sys
 from collections import Counter
 from importlib.metadata import version
@@ -26,6 +27,7 @@ from dependency_policy import (
   DependencyPolicy,
   ImportMode,
   extra_dependencies,
+  names_in,
   policy_for,
 )
 from import_graph_support import PackageBoundary, import_edges, python_modules
@@ -40,13 +42,14 @@ from package_contract_support import (
   locked_requirement,
   lockfile,
   named_dependencies,
+  normalize_specifier,
   parse_requirement,
   project_metadata,
   release_tuple,
 )
 
-PATCHED_TORNADO_MINIMUM = (6, 5, 5)
-NEXT_TORNADO_MAJOR = (7, 0, 0)
+DOCS_START = "<!-- dependency-policy:start -->"
+DOCS_END = "<!-- dependency-policy:end -->"
 REMOVED_DEPENDENCIES = ("coloredlogs", "neo4j-driver")
 OPTIONAL_INTEGRATIONS = frozenset({"neo4j", "neo4j-driver", "pgvector"})
 EXTRA_SELECTIONS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
@@ -259,21 +262,62 @@ def test_compatibility_entries_cite_an_existing_verification_test(
   assert test_name in defined_tests(), entry.verified_by
 
 
-def declared_requirement(name: str) -> Requirement:
-  """Return the parsed root runtime requirement for one dependency."""
-  requirements = [
+def declared_requirement(name: str, surface: str = RUNTIME) -> Requirement:
+  """Return the single parsed root requirement for one dependency on one surface."""
+  metadata = project_metadata()
+  if surface == OVERRIDE:
+    requirements = metadata["tool"]["uv"]["override-dependencies"]
+  else:
+    requirements = metadata["project"]["dependencies"]
+  matches = [
     parse_requirement(requirement)
-    for requirement in project_metadata()["project"]["dependencies"]
+    for requirement in requirements
     if parse_requirement(requirement).name == name
   ]
-  assert len(requirements) == 1, (name, requirements)
-  return requirements[0]
+  assert len(matches) == 1, (name, surface, matches)
+  return matches[0]
+
+
+def check_boundary(entry: DependencyPolicy, release: tuple[int, ...]) -> None:
+  """Fail unless a release lies within an entry's approved version boundary."""
+  boundary = entry.boundary
+  assert boundary is not None, f"{entry.name} has no version boundary"
+  if release < boundary.minimum:
+    fail(f"{entry.name} {release} is below the approved minimum {boundary.minimum}")
+  if release >= boundary.maximum_exclusive:
+    fail(f"{entry.name} {release} is at or above {boundary.maximum_exclusive}")
+
+
+BOUNDED_ENTRIES = [entry for entry in POLICY if entry.boundary is not None]
+
+
+@pytest.mark.parametrize("entry", BOUNDED_ENTRIES, ids=lambda entry: entry.name)
+def test_bounded_declarations_and_locks_match_their_approved_boundary(
+  entry: DependencyPolicy,
+) -> None:
+  """Given a bounded policy entry, its declaration and its single locked release conform."""
+  declared = declared_requirement(entry.name, entry.surface)
+  locked = locked_package_versions(entry.name)
+
+  assert declared.specifier == normalize_specifier(entry.boundary.specifier)
+  assert len(locked) == 1, f"expected one locked {entry.name} release, got {locked}"
+  check_boundary(entry, release_tuple(locked[0]))
+
+
+def test_compatibility_boundaries_cover_the_ptb_baseline() -> None:
+  """PTB and every compatibility pin carry an explicit version boundary."""
+  bounded = {entry.name for entry in BOUNDED_ENTRIES}
+
+  assert names_in(DependencyClass.COMPATIBILITY) | {"python-telegram-bot"} == bounded
 
 
 def test_ptb_stays_on_the_approved_13_15_baseline() -> None:
   """PTB stays on its approved synchronous 13.x declaration and resolves to 13.15."""
-  assert declared_requirement("python-telegram-bot").specifier == "<14,>=13.15"
+  entry = policy_for("python-telegram-bot", RUNTIME)
+
+  assert entry.boundary.specifier == ">=13.15,<14"
   assert locked_package_versions("python-telegram-bot") == ["13.15"]
+  check_boundary(entry, release_tuple(version("python-telegram-bot")))
 
 
 def test_psycopg_is_loaded_through_the_sqlalchemy_dialect() -> None:
@@ -287,39 +331,95 @@ def test_psycopg_is_loaded_through_the_sqlalchemy_dialect() -> None:
 
 
 def test_urllib3_stays_on_the_ptb_fallback_line() -> None:
-  """urllib3 stays declared and resolved on the 1.26.x line PTB 13 falls back to."""
-  assert declared_requirement("urllib3").specifier == "<1.27,>=1.26"
-  (locked,) = locked_package_versions("urllib3")
-  assert (1, 26) <= release_tuple(locked) < (1, 27)
+  """urllib3 1.26.x stays resolved and keeps the contrib module PTB 13's fallback imports."""
+  entry = policy_for("urllib3", RUNTIME)
+
+  assert entry.boundary.specifier == ">=1.26,<1.27"
+  check_boundary(entry, release_tuple(version("urllib3")))
+  assert importlib.import_module("urllib3.contrib.appengine") is not None
 
 
 def test_six_stays_within_its_retained_bound() -> None:
-  """six stays declared and resolved within its retained legacy bound."""
-  assert declared_requirement("six").specifier == "<1.18,>=1.17"
-  (locked,) = locked_package_versions("six")
-  assert (1, 17) <= release_tuple(locked) < (1, 18)
+  """six stays within its retained bound and is still required through APScheduler."""
+  entry = policy_for("six", RUNTIME)
+  apscheduler = {dependency["name"] for dependency in locked_package("apscheduler")["dependencies"]}
+  ptb = {dependency["name"] for dependency in locked_package("python-telegram-bot")["dependencies"]}
 
-
-def check_patched_tornado_boundary(tornado_version: tuple[int, ...]) -> None:
-  """Check that a Tornado version is patched and still on the 6.x line."""
-  if tornado_version < PATCHED_TORNADO_MINIMUM:
-    fail(f"Tornado {tornado_version} is below the patched minimum")
-  if tornado_version >= NEXT_TORNADO_MAJOR:
-    fail(f"Tornado {tornado_version} is outside the supported 6.x line")
+  assert entry.boundary.specifier == ">=1.17,<1.18"
+  check_boundary(entry, release_tuple(version("six")))
+  assert "six" in apscheduler
+  assert "apscheduler" in ptb
 
 
 def test_resolved_tornado_version_is_patched_and_bounded() -> None:
-  """Tornado must stay within the patched 6.x line."""
-  check_patched_tornado_boundary(release_tuple(version("tornado")))
+  """The installed Tornado must stay within the patched 6.x line."""
+  check_boundary(policy_for("tornado", OVERRIDE), release_tuple(version("tornado")))
 
 
 def test_lockfile_contains_exactly_one_patched_tornado_release() -> None:
   """The committed uv lockfile must not regress to vulnerable Tornado."""
+  entry = policy_for("tornado", OVERRIDE)
   tornado_versions = locked_package_versions("tornado")
 
   if len(tornado_versions) != 1:
     fail(f"Expected exactly one locked Tornado release, got {tornado_versions}")
-  check_patched_tornado_boundary(release_tuple(tornado_versions[0]))
+  check_boundary(entry, release_tuple(tornado_versions[0]))
+  assert entry.boundary.specifier == ">=6.5.5,<7"
+  assert (entry.boundary.minimum, entry.boundary.maximum_exclusive) == ((6, 5, 5), (7, 0, 0))
+
+
+def test_tornado_override_records_its_deployment_assumption_and_removal_condition() -> None:
+  """The override is justified by polling-only startup, which its own tests still cover."""
+  entry = policy_for("tornado", OVERRIDE)
+  startup_tests = ROOT / "tests" / "test_startup_contract.py"
+  startup_tree = ast.parse(startup_tests.read_text(encoding="utf-8"))
+  startup_names = {node.name for node in startup_tree.body if isinstance(node, ast.FunctionDef)}
+
+  assert "polling" in entry.justification
+  assert entry.removal_condition is not None
+  assert "PTB migration" in entry.removal_condition
+  assert "test_start_polling_service_starts_polling_and_never_webhook" in startup_names
+
+
+# --- Documentation ----------------------------------------------------------------------------
+
+
+def documented_policy() -> list[tuple[str, str, str, str]]:
+  """Parse the delimited dependency-policy table rows from CONTRIBUTING.md."""
+  text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+  _, start, rest = text.partition(DOCS_START)
+  section, end, _ = rest.partition(DOCS_END)
+  assert start and end, "CONTRIBUTING.md has no delimited dependency-policy section"
+  rows = []
+  for line in section.splitlines():
+    if not line.lstrip().startswith("|"):
+      continue
+    cells = [_plain(cell) for cell in line.strip().strip("|").split("|")]
+    if len(cells) != 4 or cells[0] == "Dependency" or set(cells[0]) <= set("-: "):
+      continue
+    rows.append((cells[0], cells[1], cells[2], cells[3]))
+  return rows
+
+
+def _plain(cell: str) -> str:
+  """Collapse whitespace and drop inline-code markers from a Markdown table cell."""
+  return " ".join(cell.replace("`", "").split())
+
+
+def test_contributing_documents_every_policy_entry_once() -> None:
+  """Given the executable policy, the documented table lists each entry exactly once."""
+  documented = Counter((name, surface) for name, _, surface, _ in documented_policy())
+
+  assert [key for key, count in documented.items() if count > 1] == []
+  assert set(documented) == {(entry.name, entry.surface) for entry in POLICY}
+
+
+def test_contributing_policy_rows_agree_with_the_executable_policy() -> None:
+  """Documented classifications, surfaces, and purposes match their policy entries."""
+  for name, classification, surface, purpose in documented_policy():
+    entry = policy_for(name, surface)
+    assert classification == entry.dependency_class.value, name
+    assert purpose == _plain(entry.justification), name
 
 
 # --- Lockfile consistency ---------------------------------------------------------------------

@@ -70,7 +70,9 @@ norecursedirs = [
 [tool.uv]
 # PTB 13.15 pins tornado==6.1, but Stickfix starts via polling only and does
 # not expose PTB's Tornado webhook server path affected by CVE-2026-31958.
-# Remove this bounded override during a future PTB migration.
+# Replace this bounded override only during an approved PTB migration that
+# demonstrates equivalent behavior and no dependency-security regression.
+# Policy and boundary: tests/architecture/dependency_policy.py.
 override-dependencies = ["tornado>=6.5.5,<7"]
 
 [tool.uv.workspace]

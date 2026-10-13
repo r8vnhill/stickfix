@@ -39,6 +39,15 @@ class ImportMode(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class VersionBoundary:
+  """An approved release range and the specifier that declares it."""
+
+  minimum: tuple[int, ...]
+  maximum_exclusive: tuple[int, ...]
+  specifier: str
+
+
+@dataclass(frozen=True, slots=True)
 class DependencyPolicy:
   """One declared dependency, its purpose, and the evidence that keeps it honest."""
 
@@ -49,6 +58,8 @@ class DependencyPolicy:
   import_mode: ImportMode
   imports: tuple[str, ...] = ()
   verified_by: str | None = None
+  boundary: VersionBoundary | None = None
+  removal_condition: str | None = None
 
 
 def _verified_by(test_name: str) -> str:
@@ -88,6 +99,7 @@ POLICY: tuple[DependencyPolicy, ...] = (
     ImportMode.DIRECT,
     ("telegram",),
     _verified_by("test_ptb_stays_on_the_approved_13_15_baseline"),
+    VersionBoundary((13, 15), (14,), ">=13.15,<14"),
   ),
   DependencyPolicy(
     "pyyaml",
@@ -109,7 +121,7 @@ POLICY: tuple[DependencyPolicy, ...] = (
     "alembic",
     DependencyClass.RUNTIME,
     RUNTIME,
-    "PostgreSQL schema migrations applied before the bot starts.",
+    "PostgreSQL schema migrations under alembic/.",
     ImportMode.DIRECT,
     ("alembic",),
   ),
@@ -131,6 +143,7 @@ POLICY: tuple[DependencyPolicy, ...] = (
     ImportMode.TRANSITIVE_COMPATIBILITY,
     ("urllib3",),
     _verified_by("test_urllib3_stays_on_the_ptb_fallback_line"),
+    VersionBoundary((1, 26), (1, 27), ">=1.26,<1.27"),
   ),
   DependencyPolicy(
     "six",
@@ -141,6 +154,7 @@ POLICY: tuple[DependencyPolicy, ...] = (
     ImportMode.TRANSITIVE_COMPATIBILITY,
     ("six",),
     _verified_by("test_six_stays_within_its_retained_bound"),
+    VersionBoundary((1, 17), (1, 18), ">=1.17,<1.18"),
   ),
   DependencyPolicy(
     "tornado",
@@ -151,19 +165,23 @@ POLICY: tuple[DependencyPolicy, ...] = (
     ImportMode.TRANSITIVE_COMPATIBILITY,
     ("tornado",),
     _verified_by("test_lockfile_contains_exactly_one_patched_tornado_release"),
+    VersionBoundary((6, 5, 5), (7, 0, 0), ">=6.5.5,<7"),
+    "Replace only during an approved PTB migration that demonstrates equivalent behavior and no "
+    "dependency-security regression.",
   ),
   DependencyPolicy(
     "pgvector",
     DependencyClass.OPTIONAL,
     EXTRA_DB,
-    "Published db extra for vector-search experiments; not required by Stickfix persistence.",
+    "Published db extra providing pgvector support; not required by Stickfix persistence.",
     ImportMode.NOT_APPLICABLE,
   ),
   DependencyPolicy(
     "neo4j",
     DependencyClass.OPTIONAL,
     EXTRA_GRAPH,
-    "Published graph extra supplying the supported Neo4j 6.x Python driver.",
+    "Published graph extra supplying the supported Neo4j 6.x Python driver; no project code "
+    "uses it yet.",
     ImportMode.NOT_APPLICABLE,
   ),
   DependencyPolicy(
