@@ -23,11 +23,15 @@ migration CLI → legacy YAML records → migration PostgreSQL gateway
   concrete adapters.
 - `bot.handlers` translates Telegram updates and results. It receives use cases
   from `Stickfix` and does not construct persistence or migration adapters.
+- `stickfix_telegram` (`packages/stickfix-telegram/`) owns Telegram-to-domain
+  caller identity mapping. The handlers join it during Milestone 4.5; it never
+  imports runtime composition or infrastructure.
 - `bot.infrastructure.persistence.postgres` implements the runtime repository
   ports. `PostgresUserRepository` uses one transaction per mutation and also
   implements `PublicPackRepository` for the shared pack.
 - `bot.infrastructure.help` provides `FileHelpContentProvider`. One instance
-  is shared by `/help` and empty inline-query help.
+  is shared by `/help` and empty inline-query help; runtime composition chooses
+  its path (`HELP_PATH` in `bot/stickfix.py`).
 - `bot.infrastructure.logging` configures Python's standard logging handlers.
   Runtime modules obtain loggers with `logging.getLogger(__name__)`.
 - `bot.stickfix.Stickfix` is the composition root. `Stickfix(token).run()` is

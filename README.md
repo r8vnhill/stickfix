@@ -108,8 +108,10 @@ uv run --locked python -m bot.infrastructure.migration.yaml_to_postgres \
 Dependencies point inward: `handlers → use cases → ports ← infrastructure`.
 Domain and application code remain independent of Telegram and SQLAlchemy.
 
-- **Interface** (`bot.handlers`, `bot.stickfix`) — Parse Telegram updates, call use cases,
-  and format replies.
+- **Interface** (`bot.handlers`, `bot.stickfix`, and `stickfix_telegram` in
+  `packages/stickfix-telegram/`) — Parse Telegram updates, call use cases, and format replies.
+  The Telegram package currently holds caller identity mapping; the handlers move into it
+  during Milestone 4.5.
 - **Application** (`stickfix_application`, in `packages/stickfix-application/`) — Requests,
   results, errors, use cases, and `Protocol`-based ports.
 - **Domain** (`stickfix_domain`, in `packages/stickfix-domain/`) — Sticker and tag rules,

@@ -82,6 +82,26 @@ def import_edges(path: Path, boundary: PackageBoundary) -> list[ImportEdge]:
   return edges
 
 
+def boundary_edges(*boundaries: PackageBoundary) -> list[ImportEdge]:
+  """Return the import edges of every module below each boundary, in path order."""
+  return [
+    edge
+    for boundary in boundaries
+    for path in python_modules(boundary)
+    for edge in import_edges(path, boundary)
+  ]
+
+
+def describe_edge(edge: ImportEdge) -> str:
+  """Format an edge as ``path:line: importer imports imported`` for assertion messages."""
+  return f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
+
+
 def matches_forbidden_prefix(module: str, forbidden: str) -> bool:
   """Return whether an imported module is the forbidden module or a descendant."""
   return module == forbidden or module.startswith(f"{forbidden}.")
+
+
+def matches_any_prefix(module: str, prefixes: tuple[str, ...]) -> bool:
+  """Return whether a module is, or descends from, any of the given module prefixes."""
+  return any(matches_forbidden_prefix(module, prefix) for prefix in prefixes)

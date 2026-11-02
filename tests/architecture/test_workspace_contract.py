@@ -5,8 +5,10 @@ that package directories, ``[tool.uv.sources]``, and ``uv.lock`` agree with it, 
 the lock before running the locked quality and PostgreSQL steps. External dependency metadata is
 covered by ``test_dependency_lock_policy.py`` and deliberately not repeated here.
 
-When a workspace member is added or extracted (Milestone 4.5+), update ``WORKSPACE_GRAPH`` first;
-these tests then point at every other place that must change.
+When a workspace member is added or extracted (Milestone 4.5+), update ``WORKSPACE_GRAPH`` first.
+The CI build steps checked here, the documented build commands, and the artifact wheel sets all
+derive from ``build_order()``; these tests then point at the manifests, sources, lock entries, and
+CI steps that must change with it.
 """
 
 from __future__ import annotations
@@ -15,20 +17,18 @@ from collections.abc import Callable
 
 import pytest
 from ci_workflow_support import effective_env, run_commands, workflow_jobs
-from dependency_policy import WORKSPACE_GRAPH
+from dependency_policy import ROOT_DISTRIBUTION, WORKSPACE_GRAPH, WORKSPACE_MEMBERS, build_order
 from package_contract_support import (
   ROOT,
   UV_VERSION,
+  distribution_metadata,
   load_pyproject,
   locked_package,
   lockfile,
   named_dependencies,
   project_metadata,
-  workspace_member_metadata,
 )
 
-ROOT_DISTRIBUTION = "stickfix-bot"
-MEMBERS = sorted(set(WORKSPACE_GRAPH) - {ROOT_DISTRIBUTION})
 INTERNAL = frozenset(WORKSPACE_GRAPH)
 LOCKED_JOBS = ("quality", "postgres-contract")
 DATABASE_URL = "postgresql+psycopg://stickfix:stickfix-test@localhost:5432/stickfix"
@@ -36,13 +36,6 @@ StepPredicate = Callable[[str], bool]
 
 
 # --- Workspace membership ---------------------------------------------------------------------
-
-
-def metadata_for(distribution: str) -> dict[str, object]:
-  """Return the whole parsed ``pyproject.toml`` of the root or a workspace member."""
-  if distribution == ROOT_DISTRIBUTION:
-    return project_metadata()
-  return workspace_member_metadata(distribution)
 
 
 def discovered_members() -> set[str]:
@@ -63,14 +56,14 @@ def test_workspace_membership_matches_the_recorded_graph() -> None:
 
   assert metadata["project"]["name"] == ROOT_DISTRIBUTION
   assert metadata["tool"]["uv"]["workspace"]["members"] == ["packages/*"]
-  assert discovered_members() == set(MEMBERS)
+  assert discovered_members() == set(WORKSPACE_MEMBERS)
   assert set(lockfile()["manifest"]["members"]) == INTERNAL
 
 
 @pytest.mark.parametrize("distribution", sorted(WORKSPACE_GRAPH))
 def test_locked_workspace_identity_matches_project_metadata(distribution: str) -> None:
   """Each workspace distribution is locked at its declared version and editable source."""
-  project = metadata_for(distribution)["project"]
+  project = distribution_metadata(distribution)["project"]
   locked = locked_package(distribution)
 
   assert locked["version"] == project["version"]
@@ -90,7 +83,7 @@ def locked_edges(distribution: str) -> tuple[set[str], dict[str, str]]:
 @pytest.mark.parametrize("distribution", sorted(WORKSPACE_GRAPH))
 def test_locked_internal_edges_match_the_recorded_graph(distribution: str) -> None:
   """Given a member, its declared, sourced, and locked internal edges agree with the graph."""
-  metadata = metadata_for(distribution)
+  metadata = distribution_metadata(distribution)
   expected = set(WORKSPACE_GRAPH[distribution])
   sources = metadata.get("tool", {}).get("uv", {}).get("sources", {})
   edges, editable = locked_edges(distribution)
@@ -128,9 +121,8 @@ QUALITY_SEQUENCE: tuple[tuple[str, StepPredicate], ...] = (
   ("ruff check", _has("ruff", "check")),
   ("ruff format --check", _has("ruff", "format", "--check")),
   ("pytest (full suite)", _full_pytest),
-  ("build stickfix-domain", _has("uv", "build", "--package", "stickfix-domain")),
-  ("build stickfix-application", _has("uv", "build", "--package", "stickfix-application")),
-  ("build stickfix-bot", _has("uv", "build", "--package", "stickfix-bot")),
+  # Every workspace wheel is built, dependencies first, after the tests pass.
+  *((f"build {name}", _has("uv", "build", "--package", name)) for name in build_order()),
 )
 POSTGRES_SEQUENCE: tuple[tuple[str, StepPredicate], ...] = (
   ("alembic upgrade head", _has("alembic", "upgrade", "head")),

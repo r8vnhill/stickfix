@@ -52,6 +52,7 @@ For local coverage collection, run:
 uv run --locked pytest \
   --cov=bot \
   --cov=stickfix_application \
+  --cov=stickfix_telegram \
   --cov=stickfix_domain \
   --cov-report=term-missing
 ```
@@ -65,11 +66,12 @@ pytest coverage totals.
 
 ### Package ownership and architectural boundaries
 
-The current workspace comprises three independently built distributions:
+The current workspace comprises four independently built distributions:
 
 | Distribution / directory | Import root | Runtime dependencies |
 |---|---|---|
-| `stickfix-bot` (root) | `bot` | application, domain, third-party |
+| `stickfix-bot` (root) | `bot` | Telegram, application, domain, third-party |
+| `packages/stickfix-telegram` | `stickfix_telegram` | `stickfix-domain`, PTB 13 |
 | `packages/stickfix-application` | `stickfix_application` | `stickfix-domain` |
 | `packages/stickfix-domain` | `stickfix_domain` | standard library |
 
@@ -78,6 +80,11 @@ no longer includes `imghdr`, but PTB 13 imports it. `bot.handlers` is currently 
 namespace directory (no `__init__.py`), so root setuptools discovery uses
 `include = ["bot", "bot.*"]` and `namespaces = true`. Do not change this without a wheel-content
 test establishing the replacement topology.
+
+`stickfix-telegram` is mid-extraction (Milestone 4.5): it currently owns caller identity
+mapping (`stickfix_telegram.identity`), while the handlers remain in `bot.handlers`. It must not
+import runtime composition, configuration, or infrastructure. It does not ship `imghdr.py`, so
+importing PTB on Python 3.14 still relies on the root distribution's compatibility module.
 
 The domain and application are free of Telegram, SQLAlchemy, and runtime infrastructure concerns.
 Preserve their package-boundary tests rather than relying on `uv` to prevent invalid imports.
@@ -110,6 +117,7 @@ uv run --locked ruff format --check .
 uv run --locked pytest
 uv build --package stickfix-domain
 uv build --package stickfix-application
+uv build --package stickfix-telegram
 uv build --package stickfix-bot
 ```
 
@@ -201,14 +209,18 @@ Milestone 4.5–4.7 will extract Telegram adapters, move runtime composition int
 `stickfix_runtime`, and retire legacy `bot.*` imports. When making these changes, update together:
 
 - workspace member declarations, root dependencies, and `[tool.uv.sources]`;
-- `WORKSPACE_GRAPH` and dependency-policy tests;
+- `WORKSPACE_GRAPH` and dependency-policy tests. Start here: `build_order()` derives the CI
+  build steps, documented build commands, and artifact wheel sets that the tests expect. A new
+  member also needs a `MEMBER_ALLOWED_IMPORTS` entry (`test_dependency_boundaries.py`) and a
+  `MEMBER_THIRD_PARTY` entry (`test_package_metadata.py`); tests fail until both exist;
 - setuptools discovery, standalone modules, and packaged resources;
 - wheel archive, isolated-install, and container source-copy contracts;
 - Docker/Compose commands, Alembic paths, CI, and user-facing documentation.
 
-The help text is currently referenced through a working-directory-relative path. Do not treat
-an isolated module-import probe as evidence that every resource lookup works from arbitrary
-working directories. Resource relocation belongs to the runtime extraction milestone.
+The help text is currently referenced through a working-directory-relative path, resolved by
+runtime composition (`HELP_PATH` in `bot/stickfix.py`). Do not treat an isolated module-import
+probe as evidence that every resource lookup works from arbitrary working directories. Resource
+relocation belongs to the runtime extraction milestone.
 
 ## Optional extras and database verification
 
@@ -244,6 +256,7 @@ When you add, remove, or move a dependency, update the policy and this table in 
 |---|---|---|---|
 | `stickfix-domain` | internal | `runtime` | Telegram-free user and sticker rules. |
 | `stickfix-application` | internal | `runtime` | Transport-agnostic use cases, ports, and DTOs. |
+| `stickfix-telegram` | internal | `runtime` | Telegram adapters; currently identity mapping only. |
 | `python-telegram-bot` | runtime | `runtime` | PTB 13.15 synchronous Telegram framework. |
 | `pyyaml` | runtime | `runtime` | Historical YAML import for one-shot PostgreSQL migration. |
 | `sqlalchemy` | runtime | `runtime` | PostgreSQL persistence models, sessions, and repositories. |
@@ -296,7 +309,7 @@ The current `.github/workflows/ci.yml` has:
 
 | Job | Current responsibility |
 |---|---|
-| `quality` | Python 3.14, uv 0.12.7, locked checks, Ruff, pytest, and three wheel builds |
+| `quality` | Python 3.14, uv 0.12.7, locked checks, Ruff, pytest, and four wheel builds |
 | `postgres-contract` | PostgreSQL 18.6, Alembic upgrade/check, integration tests |
 | `container` | Image build, offline smoke checks, Alembic CLI, and Compose validation |
 

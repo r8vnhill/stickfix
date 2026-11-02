@@ -2,7 +2,7 @@
 # test_container_contract.py pin their steps, ordering, locked execution, and the uv version.
 #
 # - quality: lock check, locked sync, lint, format, full pytest (incl. wheel and isolated-install
-#   contracts), and the three workspace wheel builds.
+#   contracts), and the four workspace wheel builds.
 # - postgres-contract: Alembic migrations and integration tests against a disposable database.
 # - container: real image build plus offline runtime and migration-CLI smoke checks.
 #
@@ -34,6 +34,7 @@ jobs:
       - run: uv run --locked pytest
       - run: uv build --package stickfix-domain
       - run: uv build --package stickfix-application
+      - run: uv build --package stickfix-telegram
       - run: uv build --package stickfix-bot
 
   postgres-contract:

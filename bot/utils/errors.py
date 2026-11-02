@@ -1,21 +1,22 @@
-""" "Stickfix" (c) by Ignacio Slater M.
-"Stickfix" is licensed under a
-Creative Commons Attribution 4.0 International License.
+# SPDX-License-Identifier: BSD-2-Clause
 
-You should have received a copy of the license along with this
-work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+"""Exceptions raised and handled inside the Telegram adapters.
+
+These are adapter control flow, not application errors: the ``bot.utils.messages`` checks reply to
+the user first and then raise one of them so the handler stops processing; handlers catch them and
+only log. Application failures use ``stickfix_application.errors`` instead. Keep new adapter-only
+failures here until Milestone 4.5 moves them next to the handlers that raise them.
 """
 
 import logging
 
 
 class StickfixException(Exception):
-  """
-  Base class for exceptions in this module
+  """Base class for adapter exceptions that carry a log message and its cause.
 
   Attributes:
-      err_message -- message sent by the error.
-      err_cause -- reason that caused the exception.
+      message: Text logged when the exception is raised (``err_message`` argument).
+      cause: Why it was raised (``err_cause`` argument); ``"UNKNOWN."`` when omitted.
   """
 
   def __init__(self, err_message="", err_cause=None):
@@ -24,36 +25,26 @@ class StickfixException(Exception):
 
 
 class InputException(StickfixException):
-  """
-  Exception raised when the arguments passed as input to the bot are incorrect.
-  """
+  """Raised when a command's arguments are malformed."""
 
 
 class NoStickerException(StickfixException):
-  """
-  Exception raised when the bot can't find a sticker in a message.
-  """
+  """Raised when a command must reply to a sticker but the replied-to message has none."""
 
 
 class WrongContextException(StickfixException):
-  """
-  Exception raised when the bot tries to execute a command from the wrong context.
-  For example, this exception should be raised if a command can only be called from a private
-  chat and is being
-  called from a group chat.
+  """Raised when a command runs in the wrong chat context.
+
+  For example, a command restricted to private chats that is called from a group chat.
   """
 
 
 class InsufficientPermissionsException(StickfixException):
-  """
-  Exception raised when a user tries to call a command without the appropriate permissions.
-  """
+  """Raised when a user calls a command without the required permissions."""
 
 
 class DatabaseException(StickfixException):
-  """
-  Exception raised when a database operation fails.
-  """
+  """Raised when a database operation fails."""
 
 
 # Keep the historical misspelling importable for callers outside the bot.
@@ -62,7 +53,11 @@ Databasexception = DatabaseException
 
 
 def unexpected_error(e: Exception, a_logger: logging.Logger):
-  """Logs an unhandled exception."""
+  """Log an exception a handler did not expect, at CRITICAL level, without re-raising it.
+
+  Handlers call this from their catch-all branch so a failing update never stops polling; the
+  inline-query handler re-raises afterwards so PTB's error handling still sees the failure.
+  """
   a_logger.critical("Unexpected error")
   a_logger.critical(str(type(e)))
   a_logger.critical(str(e.args))

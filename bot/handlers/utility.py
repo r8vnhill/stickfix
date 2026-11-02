@@ -1,9 +1,15 @@
-""" "Stickfix" (c) by Ignacio Slater M.
-"Stickfix" is licensed under a
-Creative Commons Attribution 4.0 International License.
+# SPDX-License-Identifier: BSD-2-Clause
 
-You should have received a copy of the license along with this
-work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+"""Telegram adapters for greeting, help, and per-user settings commands.
+
+``HelperHandler`` answers ``/start`` and ``/help``; ``UserHandler`` answers ``/deleteMe``,
+``/setMode``, and ``/shuffle``. Handlers register their callbacks on the dispatcher passed to the
+constructor and keep only the injected use cases. Help text arrives through ``GetHelp``: this
+module never knows where the help resource lives, which runtime composition decides.
+
+Command names come from ``bot.utils.messages.Commands`` and reply texts are part of the bot's
+observable contract; ``tests/handlers/test_user_handler_flows.py`` and
+``tests/handlers/test_user_handler_set_mode.py`` pin both through the registered callbacks.
 """
 
 import logging
@@ -16,10 +22,10 @@ from stickfix_application.requests import (
   SetShuffleCommand,
 )
 from stickfix_application.use_cases import DeleteUser, EnsureUser, GetHelp, SetMode, SetShuffle
+from stickfix_telegram.identity import caller_id
 from telegram import ParseMode, Update
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
-from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import unexpected_error
 from bot.utils.messages import Commands, get_message_meta
 
@@ -38,14 +44,13 @@ def send_help_message(update: Update, context: CallbackContext, get_help: GetHel
     unexpected_error(e, logger)
 
 
-class HelperHandler(StickfixHandler):
+class HelperHandler:
   """Handle `/start` (greet + register the caller) and `/help` (send HELP.md)."""
 
   def __init__(self, dispatcher: Dispatcher, ensure_user: EnsureUser, get_help: GetHelp):
-    super().__init__(dispatcher)
     self.__ensure_user_use_case = ensure_user
-    self._dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
-    self._dispatcher.add_handler(
+    dispatcher.add_handler(CommandHandler(Commands.START, self.__send_hello_message))
+    dispatcher.add_handler(
       CommandHandler(
         Commands.HELP,
         lambda update, context: send_help_message(update, context, get_help),
@@ -61,7 +66,7 @@ class HelperHandler(StickfixHandler):
       logger.info(f"User {chat.id} was added to the database.")
 
 
-class UserHandler(StickfixHandler):
+class UserHandler:
   """Handle the per-user preference/lifecycle commands: `/setMode`, `/shuffle`, `/deleteMe`."""
 
   def __init__(
@@ -71,15 +76,12 @@ class UserHandler(StickfixHandler):
     set_shuffle: SetShuffle,
     delete_user: DeleteUser,
   ):
-    super().__init__(dispatcher)
     self.__set_mode_use_case = set_mode
     self.__set_shuffle_use_case = set_shuffle
     self.__delete_user_use_case = delete_user
-    self._dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
-    self._dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
-    self._dispatcher.add_handler(
-      CommandHandler(Commands.SHUFFLE, self.__set_shuffle, pass_args=True)
-    )
+    dispatcher.add_handler(CommandHandler(Commands.DELETE_ME, self.__remove_user))
+    dispatcher.add_handler(CommandHandler(Commands.SET_MODE, self.__set_mode))
+    dispatcher.add_handler(CommandHandler(Commands.SHUFFLE, self.__set_shuffle, pass_args=True))
 
   # noinspection PyUnusedLocal
   def __remove_user(self, update: Update, context: CallbackContext) -> None:

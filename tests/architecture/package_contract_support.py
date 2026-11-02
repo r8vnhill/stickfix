@@ -2,8 +2,9 @@
 
 The helpers cover four concerns, each used by several ``tests/architecture`` modules:
 
-- metadata: ``pyproject.toml`` loading and PEP 503/508 name, specifier, and requirement
-  normalization, comparable with the forms ``uv.lock`` records;
+- metadata: ``pyproject.toml`` loading per distribution, member import roots and scanner
+  boundaries, and PEP 503/508 name, specifier, and requirement normalization, comparable with
+  the forms ``uv.lock`` records;
 - lockfile: ``tomllib``-based ``uv.lock`` lookups and locked ``uv export`` selections;
 - artifacts: wheel builds, archive inspection, and temporary virtual environments;
 - isolation: running probes outside the checkout so editable installs cannot mask defects.
@@ -26,7 +27,14 @@ from email.policy import default
 from pathlib import Path
 
 from conftest import ROOT
-from dependency_policy import DependencyClass, dev_dependencies, names_in
+from dependency_policy import (
+  ROOT_DISTRIBUTION,
+  DependencyClass,
+  build_order,
+  dev_dependencies,
+  names_in,
+)
+from import_graph_support import PackageBoundary
 
 DEV_DEPENDENCIES = dev_dependencies()
 OPTIONAL_DEPENDENCIES = names_in(DependencyClass.OPTIONAL)
@@ -106,14 +114,25 @@ def workspace_member_metadata(distribution_directory: str) -> dict[str, object]:
   return load_pyproject(path)
 
 
-def domain_metadata() -> dict[str, object]:
-  """Return parsed metadata for the domain workspace member."""
-  return workspace_member_metadata("stickfix-domain")
+def distribution_metadata(distribution: str) -> dict[str, object]:
+  """Return the whole parsed ``pyproject.toml`` of the root or of one workspace member."""
+  if distribution == ROOT_DISTRIBUTION:
+    return project_metadata()
+  return workspace_member_metadata(distribution)
 
 
-def application_metadata() -> dict[str, object]:
-  """Return parsed metadata for the application workspace member."""
-  return workspace_member_metadata("stickfix-application")
+def import_namespace(member: str) -> str:
+  """Return a workspace member's import root (``stickfix-x`` imports as ``stickfix_x``).
+
+  The root distribution is the exception (``bot``) and is never passed here.
+  """
+  return member.replace("-", "_")
+
+
+def member_boundary(member: str) -> PackageBoundary:
+  """Return the import-scanner boundary of a workspace member's ``src`` layout."""
+  source_root = ROOT / "packages" / member / "src"
+  return PackageBoundary(namespace=import_namespace(member), source_root=source_root)
 
 
 def named_dependencies(requirements: list[str]) -> set[str]:
@@ -146,10 +165,14 @@ def build_wheel(output_dir: Path, *build_args: str, pattern: str) -> Path:
   return matches[0]
 
 
-def build_package_wheel(output_dir: Path, distribution: str) -> Path:
-  """Build the wheel of one workspace distribution, selected by its project name."""
+def build_package_wheel(output_dir: Path, distribution: str, *build_args: str) -> Path:
+  """Build the wheel of one workspace distribution, selected by its project name.
+
+  Without extra ``build_args`` uv builds the sdist first and the wheel from it, which also
+  proves the sdist is complete; pass ``"--wheel"`` to build the wheel straight from source.
+  """
   pattern = f"{distribution.replace('-', '_')}-*.whl"
-  return build_wheel(output_dir, "--package", distribution, pattern=pattern)
+  return build_wheel(output_dir, *build_args, "--package", distribution, pattern=pattern)
 
 
 def wheel_metadata(wheel: Path) -> tuple[list[str], object]:
@@ -261,14 +284,7 @@ def exported_requirements(*extras: str) -> dict[str, str]:
 def locked_versions() -> dict[str, str]:
   """Return workspace, PTB, SQLAlchemy, and Tornado versions from uv.lock."""
   locked = {package["name"]: package["version"] for package in lockfile()["package"]}
-  names = (
-    "stickfix-bot",
-    "stickfix-domain",
-    "stickfix-application",
-    "python-telegram-bot",
-    "sqlalchemy",
-    "tornado",
-  )
+  names = (*build_order(), "python-telegram-bot", "sqlalchemy", "tornado")
   return {name: locked[name] for name in names}
 
 

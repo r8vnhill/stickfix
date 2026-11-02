@@ -3,6 +3,11 @@
 Each check targets a stale command that actually shipped, or a fact maintainers need to reproduce
 the verified workspace, packaging, and container workflows. The checks match substrings: they do
 not parse Markdown or impose one template, so rewording is free as long as the facts remain.
+Per-distribution build commands come from ``dependency_policy.build_order()``, so a new
+workspace member is expected in CONTRIBUTING.md as soon as it joins ``WORKSPACE_GRAPH``.
+
+Source license notices are checked here too: ``LICENSE`` is BSD-2-Clause, and any per-file notice
+must be the ``SPDX-License-Identifier: BSD-2-Clause`` line rather than a different license.
 
 When a workflow changes on purpose (for example the Milestone 4.6 entrypoint), update the
 documents and the matching expectations here in the same change.
@@ -10,7 +15,10 @@ documents and the matching expectations here in the same change.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+from dependency_policy import build_order
 from package_contract_support import ROOT, UV_VERSION
 
 DOCUMENTS = ("README.md", "CONTRIBUTING.md", "AGENTS.md")
@@ -51,9 +59,7 @@ def test_readme_documents_the_supported_local_commands() -> None:
   "fact",
   [
     *LOCKED_CHECKS,
-    "uv build --package stickfix-domain",
-    "uv build --package stickfix-application",
-    "uv build --package stickfix-bot",
+    *(f"uv build --package {name}" for name in build_order()),
     ".github/workflows/ci.yml",
     "`quality`",
     "`postgres-contract`",
@@ -86,6 +92,28 @@ def test_agents_requires_container_and_wheel_assurance_for_package_changes() -> 
   assert "Dockerfile" in text
   assert "test_container_contract.py" in text
   assert "test_root_distribution.py" in text
+
+
+def python_sources() -> list[Path]:
+  """Return the repository's own Python sources, excluding this module's search literals."""
+  roots = [ROOT / "bot", ROOT / "alembic", ROOT / "tests", *ROOT.glob("packages/*/src")]
+  roots += ROOT.glob("packages/*/tests")
+  modules = [ROOT / "imghdr.py", *(path for root in roots for path in root.rglob("*.py"))]
+  return [path for path in modules if path.resolve() != Path(__file__).resolve()]
+
+
+def test_source_license_notices_agree_with_the_bsd_2_clause_license() -> None:
+  """Source files carry no conflicting license notice; any SPDX tag names BSD-2-Clause."""
+  assert document("LICENSE").startswith('BSD 2-Clause "Simplified" License')
+  nonconformances = [
+    f"{path.relative_to(ROOT).as_posix()}:{number}: {line.strip()}"
+    for path in python_sources()
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+    if "Creative Commons" in line
+    or ("SPDX-License-Identifier:" in line and not line.rstrip().endswith(": BSD-2-Clause"))
+  ]
+
+  assert nonconformances == []
 
 
 def test_pyproject_compatibility_comments_stay_on_the_ptb_constraints() -> None:

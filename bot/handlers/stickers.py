@@ -1,9 +1,12 @@
-""" "Stickfix" (c) by Ignacio Slater M.
-"Stickfix" is licensed under a
-Creative Commons Attribution 4.0 International License.
+# SPDX-License-Identifier: BSD-2-Clause
 
-You should have received a copy of the license along with this
-work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+"""Telegram adapter for the sticker commands: ``/add``, ``/get``, and ``/deleteFrom``.
+
+Each callback parses the update, builds an application request with the caller's ``UserId``
+(``stickfix_telegram.identity``), invokes the injected use case, and maps the outcome to a reply.
+Tag storage, pack selection, and the private-chat rule for ``/get`` belong to the use cases; this
+module owns only Telegram parsing, reply wording, and error translation. Reply texts are part of
+the observable bot contract; ``tests/handlers/test_sticker_handler.py`` pins them.
 """
 
 import logging
@@ -16,11 +19,11 @@ from stickfix_application.requests import (
   InteractionScope,
 )
 from stickfix_application.use_cases import AddSticker, DeleteSticker, GetStickers
+from stickfix_telegram.identity import caller_id
 from telegram import Message, Sticker, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CommandHandler, Dispatcher
 
-from bot.handlers.common import StickfixHandler, caller_id
 from bot.utils.errors import NoStickerException, WrongContextException, unexpected_error
 from bot.utils.messages import (
   Commands,
@@ -37,7 +40,7 @@ logger = logging.getLogger(__name__)
 _HANDLED_INPUT_ERRORS = (NoStickerException, MissingStickerError)
 
 
-class StickerHandler(StickfixHandler):
+class StickerHandler:
   """Bridge the ``/add``, ``/get``, and ``/deleteFrom`` commands to their use cases.
 
   Each callback parses the Telegram update, delegates to an ``AddSticker`` /
@@ -53,15 +56,12 @@ class StickerHandler(StickfixHandler):
     get_stickers: GetStickers,
     delete_sticker: DeleteSticker,
   ):
-    super().__init__(dispatcher)
     self.__add_sticker_use_case = add_sticker
     self.__get_stickers_use_case = get_stickers
     self.__delete_sticker_use_case = delete_sticker
-    self._dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True))
-    self._dispatcher.add_handler(CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
-    self._dispatcher.add_handler(
-      CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True)
-    )
+    dispatcher.add_handler(CommandHandler(Commands.ADD, self.__add_sticker, pass_args=True))
+    dispatcher.add_handler(CommandHandler(Commands.GET, self.__get_stickers, pass_args=True))
+    dispatcher.add_handler(CommandHandler(Commands.DELETE_FROM, self.__delete_from, pass_args=True))
 
   @staticmethod
   def __replied_sticker(message: Message, action: str = "add") -> Sticker:

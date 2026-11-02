@@ -21,8 +21,10 @@ from dependency_policy import (
   EXTRA_GRAPH,
   OVERRIDE,
   POLICY,
+  ROOT_DISTRIBUTION,
   RUNTIME,
   WORKSPACE_GRAPH,
+  WORKSPACE_MEMBERS,
   DependencyClass,
   DependencyPolicy,
   ImportMode,
@@ -30,17 +32,16 @@ from dependency_policy import (
   names_in,
   policy_for,
 )
-from import_graph_support import PackageBoundary, import_edges, python_modules
+from import_graph_support import PackageBoundary, boundary_edges
 from package_contract_support import (
   ROOT,
   Requirement,
-  application_metadata,
-  domain_metadata,
+  distribution_metadata,
   exported_requirements,
+  import_namespace,
   locked_package,
   locked_package_versions,
-  locked_requirement,
-  lockfile,
+  member_boundary,
   named_dependencies,
   normalize_specifier,
   parse_requirement,
@@ -60,26 +61,17 @@ EXTRA_SELECTIONS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
 )
 LOCAL_TOP_LEVEL_MODULES = {"imghdr"}
 PRODUCTION_ROOTS: dict[str, tuple[PackageBoundary, ...]] = {
-  "stickfix-bot": (
+  ROOT_DISTRIBUTION: (
     PackageBoundary(namespace="bot", source_root=ROOT),
     PackageBoundary(namespace="alembic", source_root=ROOT),
   ),
-  "stickfix-domain": (
-    PackageBoundary(
-      namespace="stickfix_domain", source_root=ROOT / "packages" / "stickfix-domain" / "src"
-    ),
-  ),
-  "stickfix-application": (
-    PackageBoundary(
-      namespace="stickfix_application",
-      source_root=ROOT / "packages" / "stickfix-application" / "src",
-    ),
-  ),
+  **{member: (member_boundary(member),) for member in WORKSPACE_MEMBERS},
 }
+# Import roots each distribution owns. The root's ``alembic/`` scripts import the third-party
+# ``alembic`` distribution, so only ``bot`` counts as the root's own namespace.
 OWN_NAMESPACES = {
-  "stickfix-bot": {"bot"},
-  "stickfix-domain": {"stickfix_domain"},
-  "stickfix-application": {"stickfix_application"},
+  ROOT_DISTRIBUTION: {"bot"},
+  **{member: {import_namespace(member)} for member in WORKSPACE_MEMBERS},
 }
 
 
@@ -138,17 +130,12 @@ def test_internal_entries_match_workspace_sources_and_graph() -> None:
   metadata = project_metadata()
   internal = {entry.name for entry in POLICY if entry.dependency_class is DependencyClass.INTERNAL}
   sources = metadata["tool"]["uv"]["sources"]
-  members = {
-    "stickfix-bot": metadata["project"],
-    "stickfix-domain": domain_metadata()["project"],
-    "stickfix-application": application_metadata()["project"],
-  }
 
-  assert internal == set(WORKSPACE_GRAPH["stickfix-bot"])
+  assert internal == set(WORKSPACE_GRAPH[ROOT_DISTRIBUTION])
   assert {name for name, source in sources.items() if source == {"workspace": True}} == internal
-  for distribution, project in members.items():
-    workspace_edges = named_dependencies(project["dependencies"]) & set(WORKSPACE_GRAPH)
-    assert workspace_edges == WORKSPACE_GRAPH[distribution], distribution
+  for distribution, expected in WORKSPACE_GRAPH.items():
+    project = distribution_metadata(distribution)["project"]
+    assert named_dependencies(project["dependencies"]) & set(WORKSPACE_GRAPH) == expected
 
 
 # --- Import ownership -------------------------------------------------------------------------
@@ -158,22 +145,23 @@ def production_top_level_imports(distribution: str) -> dict[str, list[str]]:
   """Map third-party top-level imports in a distribution's sources to their locations."""
   ignored = sys.stdlib_module_names | OWN_NAMESPACES[distribution] | LOCAL_TOP_LEVEL_MODULES
   imports: dict[str, list[str]] = {}
-  for boundary in PRODUCTION_ROOTS[distribution]:
-    for path in python_modules(boundary):
-      for edge in import_edges(path, boundary):
-        top_level = edge.imported.partition(".")[0]
-        if top_level not in ignored:
-          location = f"{path.relative_to(ROOT).as_posix()}:{edge.line}"
-          imports.setdefault(top_level, []).append(location)
+  for edge in boundary_edges(*PRODUCTION_ROOTS[distribution]):
+    top_level = edge.imported.partition(".")[0]
+    if top_level not in ignored:
+      location = f"{edge.path.relative_to(ROOT).as_posix()}:{edge.line}"
+      imports.setdefault(top_level, []).append(location)
   return imports
 
 
 def distribution_dependencies(distribution: str) -> set[str]:
-  """Return the direct runtime dependency names a distribution publishes."""
-  if distribution == "stickfix-bot":
+  """Return the direct runtime dependency names a distribution publishes.
+
+  The root is read from the policy table, which the declaration tests keep equal to its
+  ``pyproject.toml``; members have no policy rows and are read from their own manifests.
+  """
+  if distribution == ROOT_DISTRIBUTION:
     return {entry.name for entry in POLICY if entry.surface == RUNTIME}
-  metadata = {"stickfix-domain": domain_metadata, "stickfix-application": application_metadata}
-  return named_dependencies(metadata[distribution]()["project"]["dependencies"])
+  return named_dependencies(distribution_metadata(distribution)["project"]["dependencies"])
 
 
 def namespace_owners() -> dict[str, str]:

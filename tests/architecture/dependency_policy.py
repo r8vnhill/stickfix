@@ -69,10 +69,31 @@ def _verified_by(test_name: str) -> str:
 
 # Direct workspace edges per distribution; the policy must not silently change them.
 WORKSPACE_GRAPH: dict[str, frozenset[str]] = {
-  "stickfix-bot": frozenset({"stickfix-domain", "stickfix-application"}),
+  "stickfix-bot": frozenset({"stickfix-domain", "stickfix-application", "stickfix-telegram"}),
+  # Milestone 4.5 adds stickfix-application when the handlers move into this distribution.
+  "stickfix-telegram": frozenset({"stickfix-domain"}),
   "stickfix-application": frozenset({"stickfix-domain"}),
   "stickfix-domain": frozenset(),
 }
+ROOT_DISTRIBUTION = "stickfix-bot"
+WORKSPACE_MEMBERS = tuple(sorted(set(WORKSPACE_GRAPH) - {ROOT_DISTRIBUTION}))
+
+
+def build_order() -> tuple[str, ...]:
+  """Return every workspace distribution after all of its internal dependencies.
+
+  CI builds, documentation, and artifact tests derive their per-distribution lists from this
+  order, so adding a member to ``WORKSPACE_GRAPH`` is enough to extend all of them.
+  """
+  ordered: list[str] = []
+  pending = sorted(WORKSPACE_GRAPH)
+  while pending:
+    ready = [name for name in pending if WORKSPACE_GRAPH[name] <= set(ordered)]
+    assert ready, f"WORKSPACE_GRAPH has a dependency cycle among {pending}"
+    ordered += ready
+    pending = [name for name in pending if name not in ready]
+  return tuple(ordered)
+
 
 POLICY: tuple[DependencyPolicy, ...] = (
   DependencyPolicy(
@@ -90,6 +111,14 @@ POLICY: tuple[DependencyPolicy, ...] = (
     "Transport-agnostic use cases, ports, and DTOs.",
     ImportMode.DIRECT,
     ("stickfix_application",),
+  ),
+  DependencyPolicy(
+    "stickfix-telegram",
+    DependencyClass.INTERNAL,
+    RUNTIME,
+    "Telegram adapters; currently identity mapping only.",
+    ImportMode.DIRECT,
+    ("stickfix_telegram",),
   ),
   DependencyPolicy(
     "python-telegram-bot",

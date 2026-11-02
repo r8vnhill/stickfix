@@ -1,8 +1,9 @@
 """Root wheel coverage and non-editable runtime installation contracts.
 
-These tests protect the complete current ``bot`` package tree and prove that
-the three workspace wheels work outside the source checkout with locked runtime
-dependencies.
+These tests protect the complete current ``bot`` package tree and prove that every workspace
+wheel works outside the source checkout with locked runtime dependencies. The wheel set and the
+internal distribution names derive from ``WORKSPACE_GRAPH``; ``RUNTIME_MODULES`` stays an explicit,
+representative import list because each entry documents a module the deployed bot must load.
 """
 
 from __future__ import annotations
@@ -12,12 +13,15 @@ import re
 from pathlib import Path
 
 import pytest
+from dependency_policy import WORKSPACE_GRAPH, WORKSPACE_MEMBERS, build_order
 from package_contract_support import (
   DEV_DEPENDENCIES,
   OPTIONAL_DEPENDENCIES,
   ROOT,
+  build_package_wheel,
   build_wheel,
   dependency_name,
+  import_namespace,
   locked_versions,
   named_dependencies,
   project_metadata,
@@ -32,7 +36,6 @@ REPRESENTATIVE_MODULES = {
   "bot/__main__.py",
   "bot/config.py",
   "bot/stickfix.py",
-  "bot/handlers/common.py",
   "bot/handlers/inline.py",
   "bot/handlers/stickers.py",
   "bot/handlers/utility.py",
@@ -48,8 +51,8 @@ EXCLUDED_PREFIXES = (
   "data/",
   "logs/",
   "packages/",
-  "stickfix_domain/",
-  "stickfix_application/",
+  # Member packages ship in their own wheels, never inside the root wheel.
+  *(f"{import_namespace(member)}/" for member in WORKSPACE_MEMBERS),
 )
 RUNTIME_MODULES = (
   "bot.stickfix",
@@ -64,6 +67,7 @@ RUNTIME_MODULES = (
   "bot.infrastructure.migration.yaml_to_postgres",
   "stickfix_domain",
   "stickfix_application",
+  "stickfix_telegram.identity",
   "imghdr",
 )
 ORIGIN_PROBE = """
@@ -161,21 +165,10 @@ def test_root_wheel_contains_complete_runtime_tree(tmp_path: Path) -> None:
 
 
 def _build_workspace_wheels(temporary_root: Path) -> list[Path]:
-  """Build one local wheel for each current workspace distribution."""
-  specifications = (
-    ("stickfix-domain", "stickfix_domain-*.whl"),
-    ("stickfix-application", "stickfix_application-*.whl"),
-    ("stickfix-bot", "stickfix_bot-*.whl"),
-  )
+  """Build one local wheel, straight from source, for each workspace distribution."""
   return [
-    build_wheel(
-      temporary_root / "dist",
-      "--wheel",
-      "--package",
-      package,
-      pattern=pattern,
-    )
-    for package, pattern in specifications
+    build_package_wheel(temporary_root / "dist", distribution, "--wheel")
+    for distribution in build_order()
   ]
 
 
@@ -187,7 +180,7 @@ def _assert_locked_requirements(requirements: Path) -> None:
     for line in text.splitlines()
     if line.strip() and not line.lstrip().startswith(("#", "--"))
   }
-  internal = {"stickfix-bot", "stickfix-domain", "stickfix-application"}
+  internal = set(WORKSPACE_GRAPH)
   runtime = named_dependencies(project_metadata()["project"]["dependencies"])
   assert runtime - internal <= names
   assert not DEV_DEPENDENCIES & names

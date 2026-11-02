@@ -14,8 +14,10 @@
 - The supported local entrypoint is `python -m bot`; the runtime facade is
   `Stickfix(token).run()` in `bot/stickfix.py`.
 - Local `bot.py`, `secret.yml`, `.env`, and credentials are not tracked.
-- The repository is currently a three-distribution `uv` workspace:
+- The repository is currently a four-distribution `uv` workspace:
   - `stickfix-bot` at the root retains the runtime and Telegram handlers.
+  - `stickfix-telegram` is being extracted (Milestone 4.5); it currently owns Telegram caller
+    identity mapping (`stickfix_telegram.identity`) only.
   - `stickfix-application` contains transport-neutral DTOs, ports, and use cases.
   - `stickfix-domain` contains transport-neutral user/sticker rules.
 - `bot/infrastructure/persistence/` contains PostgreSQL runtime adapters.

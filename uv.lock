@@ -7,6 +7,7 @@ members = [
     "stickfix-application",
     "stickfix-bot",
     "stickfix-domain",
+    "stickfix-telegram",
 ]
 overrides = [{ name = "tornado", specifier = ">=6.5.5,<7" }]
 
@@ -617,6 +618,7 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "stickfix-application" },
     { name = "stickfix-domain" },
+    { name = "stickfix-telegram" },
     { name = "urllib3" },
 ]
 
@@ -650,6 +652,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.52,<3" },
     { name = "stickfix-application", editable = "packages/stickfix-application" },
     { name = "stickfix-domain", editable = "packages/stickfix-domain" },
+    { name = "stickfix-telegram", editable = "packages/stickfix-telegram" },
     { name = "urllib3", specifier = ">=1.26,<1.27" },
 ]
 provides-extras = ["db", "graph"]
@@ -668,6 +671,21 @@ dev = [
 name = "stickfix-domain"
 version = "0.1.0"
 source = { editable = "packages/stickfix-domain" }
+
+[[package]]
+name = "stickfix-telegram"
+version = "0.1.0"
+source = { editable = "packages/stickfix-telegram" }
+dependencies = [
+    { name = "python-telegram-bot" },
+    { name = "stickfix-domain" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "python-telegram-bot", specifier = ">=13.15,<14" },
+    { name = "stickfix-domain", editable = "packages/stickfix-domain" },
+]
 
 [[package]]
 name = "tornado"

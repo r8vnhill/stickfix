@@ -1,9 +1,11 @@
-""" "Stickfix" (c) by Ignacio Slater M.
-"Stickfix" is licensed under a
-Creative Commons Attribution 4.0 International License.
+# SPDX-License-Identifier: BSD-2-Clause
 
-You should have received a copy of the license along with this
-work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
+"""Command names and replied-sticker checks shared by the Telegram handlers.
+
+``Commands`` is the single source of command names; handlers register with it and tests look
+callbacks up by it, so renaming a member changes the bot's public interface. The ``check_*``
+helpers reply to the user *before* raising, which is why handlers only log the resulting
+``NoStickerException``. Reply wording is user-visible and preserved as is (including its typo).
 """
 
 import json
@@ -51,22 +53,27 @@ def check_sticker(sticker: Union[Sticker, None], message: Message):
 
 
 def add_error_msg(user: str) -> str:
+  """Return the log message for a failed sticker check (it names ``/add`` even for removals)."""
   return f"Command /add called by user {user} raised an exception."
 
 
 def raise_no_sticker_error(msg: str, cause: str):
+  """Log and raise ``NoStickerException``."""
   raise_error(NoStickerException, msg, cause)
 
 
 def raise_input_error(msg: str, cause: str):
+  """Log and raise ``InputException``."""
   raise_error(InputException, msg, cause)
 
 
 def raise_wrong_context_error(msg: str, cause: str) -> None:
+  """Log and raise ``WrongContextException``."""
   raise_error(WrongContextException, msg, cause)
 
 
 def raise_error(constructor: Callable, msg: str, cause: str) -> None:
+  """Build a ``StickfixException`` subclass, log its message and cause at ERROR, and raise it."""
   error = constructor(err_message=msg, err_cause=cause)
   module_logger.error(error.message)
   module_logger.error(error.cause)
@@ -74,11 +81,13 @@ def raise_error(constructor: Callable, msg: str, cause: str) -> None:
 
 
 def get_message_meta(update: Update) -> Tuple[Message, User, Chat]:
-  """Gets the metadata of a message."""
+  """Return the update's effective message, user, and chat; any of them may be ``None``."""
   return update.effective_message, update.effective_user, update.effective_chat
 
 
 class Commands(str, Enum):
+  """Telegram command names, without the leading slash; values are matched by PTB."""
+
   ADD = "add"
   DELETE_FROM = "deleteFrom"
   DELETE_ME = "deleteMe"

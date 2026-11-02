@@ -1,15 +1,10 @@
+# SPDX-License-Identifier: BSD-2-Clause
+
 """Telegram adapter for inline queries and chosen-result callbacks.
 
 The handler translates Telegram objects into application requests and translates
 application results back into Telegram result objects. Query resolution and cache
 invalidation remain in injected use cases; this module owns no persistence logic.
-
-"Stickfix" (c) by Ignacio Slater M.
-"Stickfix" is licensed under a
-Creative Commons Attribution 4.0 International License.
-
-You should have received a copy of the license along with this
-work. If not, see <http://creativecommons.org/licenses/by/4.0/>.
 """
 
 import logging
@@ -19,6 +14,7 @@ from stickfix_application.requests import ClearInlineCacheCommand, InlineQueryRe
 from stickfix_application.results import InlineQueryResult
 from stickfix_application.use_cases.clear_inline_cache import ClearInlineCache
 from stickfix_application.use_cases.resolve_inline_query import ResolveInlineQuery
+from stickfix_telegram.identity import optional_caller_id
 from telegram import (
   InlineQueryResultArticle,
   InlineQueryResultCachedSticker,
@@ -28,7 +24,6 @@ from telegram import (
 )
 from telegram.ext import CallbackContext, ChosenInlineResultHandler, Dispatcher, InlineQueryHandler
 
-from bot.handlers.common import StickfixHandler, optional_caller_id
 from bot.utils.errors import unexpected_error
 
 logger = logging.getLogger(__name__)
@@ -37,7 +32,7 @@ logger = logging.getLogger(__name__)
 _INLINE_PAGE_LIMIT = 49
 
 
-class InlineHandler(StickfixHandler):
+class InlineHandler:
   """Wire Telegram inline queries and chosen-result callbacks to their use cases.
 
   ``__inline_get`` answers an inline query with a page of cached-sticker results
@@ -53,11 +48,10 @@ class InlineHandler(StickfixHandler):
     resolve_inline_query: ResolveInlineQuery,
     clear_inline_cache: ClearInlineCache,
   ) -> None:
-    super().__init__(dispatcher)
     self._resolve_inline_query = resolve_inline_query
     self._clear_inline_cache = clear_inline_cache
-    self._dispatcher.add_handler(InlineQueryHandler(self.__inline_get))
-    self._dispatcher.add_handler(ChosenInlineResultHandler(self.__on_result))
+    dispatcher.add_handler(InlineQueryHandler(self.__inline_get))
+    dispatcher.add_handler(ChosenInlineResultHandler(self.__on_result))
 
   def __inline_get(
     self,

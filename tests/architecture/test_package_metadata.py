@@ -1,7 +1,9 @@
 """Workspace metadata and published dependency contracts.
 
-These checks keep the root, domain, and application distributions aligned with
-the workspace graph and prevent development requirements from reaching users.
+These checks keep the root and every workspace member aligned with ``WORKSPACE_GRAPH`` and
+prevent development requirements from reaching users. Member checks are parametrized over
+``WORKSPACE_MEMBERS``; when a member gains or loses a third-party requirement, update
+``MEMBER_THIRD_PARTY`` together with its ``pyproject.toml``.
 """
 
 from __future__ import annotations
@@ -10,19 +12,29 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from dependency_policy import RUNTIME, WORKSPACE_GRAPH, WORKSPACE_MEMBERS, policy_for
 from package_contract_support import (
   DEV_DEPENDENCIES,
-  application_metadata,
   build_isolated_application_interpreter,
+  build_package_wheel,
   build_wheel,
   dependency_name,
-  domain_metadata,
+  import_namespace,
   install_wheel_in_venv,
   named_dependencies,
+  parse_requirement,
   project_metadata,
   run_application_import_probe,
   wheel_metadata,
+  workspace_member_metadata,
 )
+
+# Third-party runtime requirements each member publishes; internal edges come from the graph.
+MEMBER_THIRD_PARTY: dict[str, frozenset[str]] = {
+  "stickfix-domain": frozenset(),
+  "stickfix-application": frozenset(),
+  "stickfix-telegram": frozenset({"python-telegram-bot"}),
+}
 
 
 def test_root_project_workspace_contract() -> None:
@@ -49,33 +61,42 @@ def test_dependency_surfaces_keep_development_tools_out_of_runtime() -> None:
   assert set(project["optional-dependencies"]) == {"db", "graph"}
 
 
-def test_domain_package_has_no_runtime_dependencies() -> None:
-  """The domain workspace member matches the root Python and version contract."""
+def member_requirements(member: str) -> frozenset[str]:
+  """Return every runtime requirement a member publishes: its graph edges and third parties."""
+  return WORKSPACE_GRAPH[member] | MEMBER_THIRD_PARTY[member]
+
+
+def test_every_member_records_its_third_party_requirements() -> None:
+  """A new member cannot join the workspace without declaring its external requirements here."""
+  assert set(MEMBER_THIRD_PARTY) == set(WORKSPACE_MEMBERS)
+
+
+@pytest.mark.parametrize("member", WORKSPACE_MEMBERS)
+def test_member_metadata_matches_the_root_identity_and_its_requirements(member: str) -> None:
+  """A member shares the root version, Python range, and backend; it declares only its edges."""
   root = project_metadata()["project"]
-  domain_metadata_file = domain_metadata()
-  domain = domain_metadata_file["project"]
+  metadata = workspace_member_metadata(member)
+  project = metadata["project"]
 
-  assert domain["name"] == "stickfix-domain"
-  assert domain["version"] == root["version"]
-  assert domain["requires-python"] == root["requires-python"]
-  assert domain_metadata_file["build-system"]["build-backend"] == "setuptools.build_meta"
-  assert not domain["dependencies"]
-
-
-def test_application_package_depends_only_on_stickfix_domain() -> None:
-  """The application workspace member has only the domain as a runtime dependency."""
-  root = project_metadata()["project"]
-  application_file = application_metadata()
-  application = application_file["project"]
-
-  assert application["name"] == "stickfix-application"
-  assert application["version"] == root["version"]
-  assert application["requires-python"] == root["requires-python"]
-  assert application_file["build-system"]["build-backend"] == "setuptools.build_meta"
-  assert named_dependencies(application["dependencies"]) == {"stickfix-domain"}
+  assert project["name"] == member
+  assert project["version"] == root["version"]
+  assert project["requires-python"] == root["requires-python"]
+  assert metadata["build-system"]["build-backend"] == "setuptools.build_meta"
+  assert named_dependencies(project["dependencies"]) == member_requirements(member)
 
 
-@pytest.mark.parametrize("distribution", ["stickfix-domain", "stickfix-application"])
+def test_telegram_package_declares_the_approved_ptb_baseline() -> None:
+  """The adapter package declares PTB with exactly the root's approved 13.x boundary."""
+  dependencies = workspace_member_metadata("stickfix-telegram")["project"]["dependencies"]
+  declared = {requirement.name: requirement for requirement in map(parse_requirement, dependencies)}
+  boundary = policy_for("python-telegram-bot", RUNTIME).boundary
+
+  assert declared["python-telegram-bot"] == parse_requirement(
+    f"python-telegram-bot{boundary.specifier}"
+  )
+
+
+@pytest.mark.parametrize("distribution", WORKSPACE_MEMBERS)
 def test_root_internal_dependencies_use_workspace_sources(distribution: str) -> None:
   """Root runtime packages resolve internal distributions from the workspace."""
   metadata = project_metadata()
@@ -102,45 +123,21 @@ def test_built_root_wheel_excludes_development_dependency_surfaces(tmp_path: Pat
   assert set(metadata.get_all("Provides-Extra", [])) == {"db", "graph"}
 
 
-def test_domain_wheel_contains_only_the_domain_package(tmp_path: Path) -> None:
-  """The domain wheel has its package and no legacy bot or runtime requirements."""
-  wheel = build_wheel(
-    tmp_path,
-    "--package",
-    "stickfix-domain",
-    pattern="stickfix_domain-*.whl",
-  )
-  names, metadata = wheel_metadata(wheel)
+@pytest.mark.parametrize("member", WORKSPACE_MEMBERS)
+def test_member_wheel_contains_only_its_package(member: str, tmp_path: Path) -> None:
+  """A member wheel ships only its own import root (no ``bot`` tree) and its requirements."""
+  names, metadata = wheel_metadata(build_package_wheel(tmp_path, member))
+  top_levels = {name.split("/", 1)[0] for name in names}
+  packages = {name for name in top_levels if not name.endswith(".dist-info")}
 
-  assert any(name.startswith("stickfix_domain/") for name in names)
-  assert not any(name.split("/", 1)[0] == "bot" for name in names)
-  assert not metadata.get_all("Requires-Dist")
-
-
-def test_application_wheel_contains_only_the_application_package(tmp_path: Path) -> None:
-  """The application wheel depends only on the domain and has no legacy bot."""
-  wheel = build_wheel(
-    tmp_path,
-    "--package",
-    "stickfix-application",
-    pattern="stickfix_application-*.whl",
-  )
-  names, metadata = wheel_metadata(wheel)
-
-  assert any(name.startswith("stickfix_application/") for name in names)
-  assert not any(name.split("/", 1)[0] == "bot" for name in names)
+  assert packages == {import_namespace(member)}
   published = {dependency_name(req) for req in metadata.get_all("Requires-Dist", [])}
-  assert published == {"stickfix-domain"}
+  assert published == member_requirements(member)
 
 
 def test_domain_wheel_imports_in_isolation(tmp_path: Path) -> None:
   """The built domain wheel imports without workspace source files available."""
-  wheel = build_wheel(
-    tmp_path / "dist",
-    "--package",
-    "stickfix-domain",
-    pattern="stickfix_domain-*.whl",
-  )
+  wheel = build_package_wheel(tmp_path / "dist", "stickfix-domain")
   python = install_wheel_in_venv(tmp_path / "venv", wheel)
   result = run_domain_import_probe(python)
 

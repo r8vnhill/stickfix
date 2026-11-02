@@ -8,14 +8,21 @@ server. Because no HTTP listening port is bound, the vulnerable Tornado
 The tests exercise the ``start_polling_service`` seam and the public ``run``
 entry point with a substituted ``Updater`` so no real Telegram connection or
 network listener is created.
+
+The composition tests also pin what runtime composition owns: one shared help
+provider for ``/help`` and inline help, built from a working-directory-relative
+``HELP_PATH``. Milestone 4.6 replaces that path with a packaged resource; update
+the help-path test in the same change.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from bot import stickfix as runtime
 from bot.stickfix import Stickfix, start_polling_service
 
 USE_CASE_NAMES = (
@@ -96,6 +103,17 @@ def test_stickfix_composes_handlers_with_shared_application_collaborators(
     use_cases["ResolveInlineQuery"].return_value,
     use_cases["ClearInlineCache"].return_value,
   )
+
+
+def test_stickfix_composition_resolves_the_working_directory_relative_help_path(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  """Runtime composition owns the help resource; the path stays relative to the process CWD."""
+  _patch_composition(monkeypatch, MagicMock(name="Updater"))
+
+  Stickfix("dummy-token", users=MagicMock(), public=MagicMock())
+
+  runtime.FileHelpContentProvider.assert_called_once_with(Path("bot/utils/HELP.md"))
 
 
 def _patch_composition(monkeypatch, updater):

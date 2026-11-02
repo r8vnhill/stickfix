@@ -23,7 +23,6 @@ from stickfix_domain.services import StickerPackService
 from telegram.ext import CallbackContext, Dispatcher, Updater
 
 from bot.config import DATABASE_URL_ENVVAR
-from bot.handlers.common import HELP_PATH
 from bot.handlers.inline import InlineHandler
 from bot.handlers.stickers import StickerHandler
 from bot.handlers.utility import HelperHandler, UserHandler
@@ -36,6 +35,9 @@ from bot.infrastructure.persistence.postgres import (
 
 DataDict = dict[str, Any]
 CallbackCtx = CallbackContext[DataDict, DataDict, DataDict]
+# Resolved against the process working directory, so the bot must start from the checkout or
+# image root. Milestone 4.6 replaces this with a packaged importlib.resources lookup.
+HELP_PATH = Path("bot/utils/HELP.md")
 
 
 def start_polling_service(
@@ -143,7 +145,7 @@ class Stickfix:
 
   def __setup_handlers(self) -> None:
     """Build each use case once and inject it into its Telegram adapter."""
-    help_content = FileHelpContentProvider(Path(HELP_PATH))
+    help_content = FileHelpContentProvider(HELP_PATH)
     stickers = StickerPackService()
     ensure_user = EnsureUser(self.__users)
     get_help = GetHelp(help_content)

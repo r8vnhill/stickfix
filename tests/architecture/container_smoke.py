@@ -12,8 +12,9 @@ Constraints for maintainers:
 - Standard library only, and never copied into the image (``test_container_contract.py`` checks
   the imports). ``normalize`` therefore duplicates ``package_contract_support.normalize_name``
   on purpose.
-- Expected versions and excluded distributions come from the image's own ``/app/uv.lock``, so the
-  probe never restates the dependency policy.
+- Expected versions, workspace members (the lock's editable entries), and excluded distributions
+  come from the image's own ``/app/uv.lock``, so the probe never restates the dependency policy
+  and needs no edit when a workspace member is added.
 - Every check runs and all failures are reported together; the exit status is nonzero on failure.
 """
 
@@ -34,8 +35,8 @@ REQUIRED_MODULES = (
   "bot.__main__",
   "stickfix_domain",
   "stickfix_application",
+  "stickfix_telegram",
 )
-WORKSPACE = ("stickfix-bot", "stickfix-domain", "stickfix-application")
 REPRESENTATIVE = ("python-telegram-bot", "sqlalchemy", "alembic", "psycopg", "tornado", "urllib3")
 
 Packages = dict[str, dict[str, object]]
@@ -55,6 +56,11 @@ def locked_packages() -> Packages:
   """Return the image's uv.lock packages keyed by normalized name."""
   lock = tomllib.loads((APP / "uv.lock").read_text(encoding="utf-8"))
   return {normalize(package["name"]): package for package in lock["package"]}
+
+
+def workspace_names(packages: Packages) -> list[str]:
+  """Return the locked workspace distributions: the packages uv records as editable sources."""
+  return sorted(name for name, package in packages.items() if "editable" in package["source"])
 
 
 def dependency_names(package: dict[str, object]) -> list[str]:
@@ -112,7 +118,7 @@ def distribution_failures(installed: dict[str, str], packages: Packages) -> list
   """Compare installed versions with the lock and reject dev-only or optional-only installs."""
   failures = [
     f"{name}: installed {installed.get(name)}, locked {packages[name]['version']}"
-    for name in (*WORKSPACE, *REPRESENTATIVE)
+    for name in (*workspace_names(packages), *REPRESENTATIVE)
     if installed.get(name) != str(packages[name]["version"])
   ]
   unexpected = sorted(excluded_distributions(packages) & set(installed))

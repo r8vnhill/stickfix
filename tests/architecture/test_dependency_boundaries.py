@@ -1,9 +1,16 @@
 """AST checks for package boundaries and forbidden import directions.
 
-The shared scanner in ``import_graph_support`` accepts both the legacy flat
-``bot`` layout and workspace members using ``src`` roots. Rules here are
-intentionally stricter than importability: they describe which layers a
-package is allowed to know about.
+The shared scanner in ``import_graph_support`` accepts both the legacy flat ``bot`` layout and
+workspace members using ``src`` roots. Rules here are intentionally stricter than importability:
+they describe which layers a package is allowed to know about, so a passing editable install is
+never taken as evidence that a boundary holds.
+
+Maintainers change the rules through the tables below, not inside individual tests:
+
+- ``MEMBER_ALLOWED_IMPORTS``: the non-stdlib import roots each workspace member may reach;
+- ``FORBIDDEN_IMPORTS``: module prefixes that a ``bot.*`` package must never import;
+- ``REMOVED_BOT_NAMESPACES``: legacy namespaces deleted by a cutover, which keeps no shims;
+- ``IDENTITY_MODULE`` and ``TELEGRAM_ADAPTER_NAMESPACES``: who may convert Telegram callers.
 """
 
 from __future__ import annotations
@@ -13,22 +20,46 @@ from pathlib import Path
 
 import pytest
 from conftest import ROOT
+from dependency_policy import WORKSPACE_MEMBERS
 from import_graph_support import (
+  ImportEdge,
   PackageBoundary,
+  boundary_edges,
+  describe_edge,
   import_edges,
+  matches_any_prefix,
   matches_forbidden_prefix,
   module_name,
-  python_modules,
 )
+from package_contract_support import member_boundary
 
-DOMAIN_SOURCE_ROOT = ROOT / "packages" / "stickfix-domain" / "src"
-APPLICATION_SOURCE_ROOT = ROOT / "packages" / "stickfix-application" / "src"
-APPLICATION_ALLOWED_NAMESPACES = ("stickfix_application", "stickfix_domain")
+BOT = PackageBoundary(namespace="bot", source_root=ROOT)
+PRODUCTION_BOUNDARIES = (BOT, *map(member_boundary, WORKSPACE_MEMBERS))
+# Besides the standard library, each member may import exactly these roots (itself included).
+MEMBER_ALLOWED_IMPORTS: dict[str, tuple[str, ...]] = {
+  "stickfix-domain": ("stickfix_domain",),
+  "stickfix-application": ("stickfix_application", "stickfix_domain"),
+  # Milestone 4.5 target edges: runtime composition and infrastructure stay out of the adapters.
+  "stickfix-telegram": (
+    "stickfix_telegram",
+    "stickfix_application",
+    "stickfix_domain",
+    "telegram",
+  ),
+}
+# Telegram-to-domain caller identity conversion and the adapters allowed to consume it.
+# ``bot.handlers`` leaves this tuple once the handlers move into ``stickfix_telegram``.
+IDENTITY_MODULE = "stickfix_telegram.identity"
+TELEGRAM_ADAPTER_NAMESPACES = ("bot.handlers", "stickfix_telegram")
+REMOVED_BOT_NAMESPACES = ("bot.domain", "bot.application", "bot.handlers.common")
 
 FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
+  # Telegram adapters receive collaborators from runtime composition; they never reach back
+  # into runtime configuration, composition, or any infrastructure adapter.
   "bot.handlers": (
-    "bot.infrastructure.persistence",
-    "bot.infrastructure.migration",
+    "bot.stickfix",
+    "bot.config",
+    "bot.infrastructure",
     "bot.database",
     "sqlalchemy",
     "psycopg",
@@ -36,80 +67,80 @@ FORBIDDEN_IMPORTS: dict[str, tuple[str, ...]] = {
 }
 
 
+def describe(edges: list[ImportEdge]) -> str:
+  """Join nonconforming edges into one assertion message, one edge per line."""
+  return "\n".join(map(describe_edge, edges))
+
+
 @pytest.mark.parametrize("package", FORBIDDEN_IMPORTS)
 def test_layer_dependency_rules(package: str) -> None:
-  """Current package rules remain effective through the reusable scanner."""
+  """Each ``bot.*`` package rule rejects imports of its forbidden module prefixes."""
   boundary = PackageBoundary(namespace=package, source_root=ROOT)
-  forbidden = FORBIDDEN_IMPORTS[package]
   nonconformances = [
-    (
-      f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}; "
-      f"forbidden by {package} dependency rule"
-    )
-    for path in python_modules(boundary)
-    for edge in import_edges(path, boundary)
-    if any(matches_forbidden_prefix(edge.imported, rule) for rule in forbidden)
+    edge
+    for edge in boundary_edges(boundary)
+    if matches_any_prefix(edge.imported, FORBIDDEN_IMPORTS[package])
   ]
 
-  assert not nonconformances, "\n".join(nonconformances)
+  assert not nonconformances, f"forbidden by the {package} rule:\n{describe(nonconformances)}"
 
 
-def test_domain_absolute_imports_are_limited_to_the_standard_library() -> None:
-  """stickfix-domain stays infrastructure-free: every external import is stdlib."""
-  boundary = PackageBoundary(namespace="stickfix_domain", source_root=DOMAIN_SOURCE_ROOT)
+def test_every_workspace_member_has_an_import_allowlist() -> None:
+  """A new member cannot join the workspace without declaring the imports it may make."""
+  assert set(MEMBER_ALLOWED_IMPORTS) == set(WORKSPACE_MEMBERS)
+
+
+@pytest.mark.parametrize("member", MEMBER_ALLOWED_IMPORTS)
+def test_member_absolute_imports_are_limited_to_an_explicit_allowlist(member: str) -> None:
+  """A workspace member reaches only the standard library and its allowlisted import roots."""
+  edges = boundary_edges(member_boundary(member))
   nonconformances = [
-    f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
-    for path in python_modules(boundary)
-    for edge in import_edges(path, boundary)
+    edge
+    for edge in edges
     if edge.imported.partition(".")[0] not in sys.stdlib_module_names
-    and not matches_forbidden_prefix(edge.imported, "stickfix_domain")
+    and not matches_any_prefix(edge.imported, MEMBER_ALLOWED_IMPORTS[member])
   ]
 
-  assert not nonconformances, "\n".join(nonconformances)
-
-
-def test_application_absolute_imports_are_limited_to_an_explicit_allowlist() -> None:
-  """stickfix-application only ever reaches stdlib, itself, or stickfix-domain."""
-  boundary = PackageBoundary(namespace="stickfix_application", source_root=APPLICATION_SOURCE_ROOT)
-  nonconformances = [
-    f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
-    for path in python_modules(boundary)
-    for edge in import_edges(path, boundary)
-    if edge.imported.partition(".")[0] not in sys.stdlib_module_names
-    and not any(
-      matches_forbidden_prefix(edge.imported, namespace)
-      for namespace in APPLICATION_ALLOWED_NAMESPACES
-    )
-  ]
-
-  assert not nonconformances, "\n".join(nonconformances)
+  assert edges, f"{member} has no import edges to check"
+  assert not nonconformances, describe(nonconformances)
 
 
 def test_domain_excludes_logging_despite_being_stdlib() -> None:
   """The domain contract deliberately excludes logging as an effect."""
-  boundary = PackageBoundary(namespace="stickfix_domain", source_root=DOMAIN_SOURCE_ROOT)
   nonconformances = [
-    f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
-    for path in python_modules(boundary)
-    for edge in import_edges(path, boundary)
+    edge
+    for edge in boundary_edges(member_boundary("stickfix-domain"))
     if matches_forbidden_prefix(edge.imported, "logging")
   ]
 
-  assert not nonconformances, "\n".join(nonconformances)
+  assert not nonconformances, describe(nonconformances)
 
 
-@pytest.mark.parametrize("removed_namespace", ["bot.domain", "bot.application"])
+def test_identity_conversion_is_consumed_only_by_telegram_adapters() -> None:
+  """Caller identity is a Telegram boundary concern; no other layer converts updates."""
+  consumers = [
+    edge
+    for edge in boundary_edges(*PRODUCTION_BOUNDARIES)
+    if matches_forbidden_prefix(edge.imported, IDENTITY_MODULE)
+  ]
+  nonconformances = [
+    edge for edge in consumers if not matches_any_prefix(edge.importer, TELEGRAM_ADAPTER_NAMESPACES)
+  ]
+
+  assert consumers, f"no production module imports {IDENTITY_MODULE}"
+  assert not nonconformances, describe(nonconformances)
+
+
+@pytest.mark.parametrize("removed_namespace", REMOVED_BOT_NAMESPACES)
 def test_no_production_module_imports_a_removed_bot_namespace(removed_namespace: str) -> None:
   """The namespace cutovers left no production import edge into removed ``bot.*`` packages."""
-  boundary = PackageBoundary(namespace="bot", source_root=ROOT)
   nonconformances = [
-    f"{edge.path}:{edge.line}: {edge.importer} imports {edge.imported}"
-    for path in python_modules(boundary)
-    for edge in import_edges(path, boundary)
+    edge
+    for edge in boundary_edges(BOT)
     if matches_forbidden_prefix(edge.imported, removed_namespace)
   ]
 
-  assert not nonconformances, "\n".join(nonconformances)
+  assert not nonconformances, describe(nonconformances)
 
 
 def test_scanner_derives_current_flat_layout_module_names() -> None:
@@ -119,7 +150,7 @@ def test_scanner_derives_current_flat_layout_module_names() -> None:
   assert module_name(ROOT / "bot" / "handlers" / "stickers.py", boundary) == (
     "bot.handlers.stickers"
   )
-  assert module_name(ROOT / "bot" / "handlers" / "common.py", boundary) == "bot.handlers.common"
+  assert module_name(ROOT / "bot" / "handlers" / "inline.py", boundary) == "bot.handlers.inline"
 
 
 def test_scanner_derives_src_layout_module_names(tmp_path: Path) -> None:
@@ -162,14 +193,10 @@ def test_relative_imports_are_resolved_before_dependency_evaluation(tmp_path: Pa
 
 def test_runtime_composition_does_not_import_migration_infrastructure() -> None:
   """The normal runtime graph must not load the one-shot migration path."""
-  boundary = PackageBoundary(namespace="bot", source_root=ROOT)
-  runtime_path = ROOT / "bot" / "stickfix.py"
   nonconformances = [
     edge
-    for edge in import_edges(runtime_path, boundary)
+    for edge in import_edges(ROOT / "bot" / "stickfix.py", BOT)
     if matches_forbidden_prefix(edge.imported, "bot.infrastructure.migration")
   ]
 
-  assert not nonconformances, "runtime composition imports migration infrastructure: " + ", ".join(
-    edge.imported for edge in nonconformances
-  )
+  assert not nonconformances, describe(nonconformances)

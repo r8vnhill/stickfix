@@ -365,6 +365,41 @@ Keep the existing Python 3.14/PTB 13 `imghdr` compatibility behavior unchanged.
 
 After application. At this point the complete functional core is already physically separated.
 
+## Progress — common handler contracts (2026-11-02)
+
+The former `bot/handlers/common.py` has been decomposed. Ownership:
+
+| Responsibility | Owner |
+|---|---|
+| Required/optional caller identity | `stickfix_telegram.identity` |
+| Telegram handler registration | each concrete handler, on its constructor `dispatcher` |
+| Help-resource resolution | runtime composition (`HELP_PATH` in `bot/stickfix.py`; packaged in 4.6) |
+| Help-content provider | `bot.infrastructure.help.FileHelpContentProvider` |
+
+Done:
+
+* `packages/stickfix-telegram` exists as a workspace member containing only `identity`.
+  It declares `stickfix-domain` and PTB `>=13.15,<14`; the root depends on it.
+* `caller_id` and `optional_caller_id` keep their signatures and results. Characterization
+  lives in `packages/stickfix-telegram/tests/test_identity.py`, including the required form's
+  `AttributeError` for a missing effective user.
+* The state-only `StickfixHandler` base was removed by maintainer decision. Handlers register
+  directly and no longer retain the dispatcher (`tests/handlers/test_handler_construction.py`).
+* `bot.handlers.common` was removed without a re-export, following the namespace-cutover policy.
+* Architecture tests require identity to be consumed only by Telegram adapters, limit
+  `stickfix_telegram` imports to stdlib, PTB, and the inner Stickfix packages, and forbid
+  `bot.handlers` from importing runtime composition, configuration, or `bot.infrastructure`.
+
+Remaining for this phase:
+
+* Add the `stickfix-application` edge to `WORKSPACE_GRAPH["stickfix-telegram"]` when the
+  handlers move; it is not declared while no module imports it.
+* Move `imghdr.py` ownership into the Telegram distribution. Until then the Telegram wheel cannot
+  import PTB on Python 3.14 without the root wheel, so it has a content/metadata contract and is
+  import-checked only through the root installed-runtime probe.
+* Drop `bot.handlers` from `TELEGRAM_ADAPTER_NAMESPACES` in
+  `tests/architecture/test_dependency_boundaries.py` once the handlers have moved.
+
 ---
 
 # Phase 4.6 — Extract and package `stickfix_runtime`
@@ -424,6 +459,19 @@ Keep migration infrastructure inaccessible from the normal bot composition path.
 * dependency-injection framework;
 * PostgreSQL redesign;
 * migration redesign.
+
+## Help-resource packaging (carried from the common-handler decomposition)
+
+`HELP_PATH` already lives in runtime composition (`bot/stickfix.py`) and is pinned by
+`tests/test_startup_contract.py`; it is still resolved against the process working directory.
+To finish:
+
+* package `HELP.md` with `stickfix_runtime` and resolve it through `importlib.resources`;
+* prove the resource is readable from a non-editable wheel installed outside the checkout,
+  and that its content matches the canonical source;
+* keep `/help` and inline help behind `HelpContentProvider`, preserving the no-cache contract;
+* record the operational change: today `HELP.md` can be edited in place and is re-read on the
+  next request, but packaged content changes only when the distribution is rebuilt.
 
 ## Suggested execution order
 
