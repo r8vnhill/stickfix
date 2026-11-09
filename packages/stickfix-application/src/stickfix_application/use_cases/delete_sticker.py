@@ -24,14 +24,15 @@ class DeleteSticker(StickerPackUseCase):
   detached from those tags. The effective pack is always saved afterwards so a
   no-op delete still round-trips cleanly. Raises :class:`MissingStickerError`
   when the command carries no sticker id. Tagged removals emit an operational
-  INFO record after the repository mutation succeeds.
+  INFO record after the repository mutation succeeds. Port `Nothing` values are
+  resolved to the same fallback and error behavior used before the Option migration.
   """
 
   def __call__(self, command: DeleteStickerCommand) -> DeleteStickerResult:
     if command.reply_sticker_id is None:
       raise MissingStickerError("A sticker id is required to delete a sticker.")
 
-    public_pack = self._public.get()
+    public_pack = self._public.get().default_value(None)
     user = resolve_effective_user(self._users, command.user_id, public_pack)
 
     mutation = self._stickers.delete_sticker(

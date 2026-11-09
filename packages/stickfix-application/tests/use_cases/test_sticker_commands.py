@@ -1,8 +1,15 @@
+"""Sticker use cases preserve effective-pack selection and save behavior.
+
+Fixtures save public state explicitly; assertions check fresh reads, operation
+results, and the existing operational log identifier.
+"""
+
 from __future__ import annotations
 
 import logging
 
 import pytest
+from expression import Nothing
 from hamcrest import assert_that, equal_to, is_
 from stickfix_application.errors import MissingStickerError, WrongInteractionContextError
 from stickfix_application.requests import (
@@ -12,7 +19,7 @@ from stickfix_application.requests import (
   InteractionScope,
 )
 from stickfix_application.use_cases import AddSticker, DeleteSticker, GetStickers
-from stickfix_domain import StickfixUser, UserId
+from stickfix_domain import SF_PUBLIC, StickfixUser, UserId
 from support.repositories import InMemoryPublicPackRepository, InMemoryUserRepository
 
 
@@ -35,9 +42,13 @@ def test_add_sticker_uses_public_pack_port_by_default(caplog: pytest.LogCaptureF
     result = AddSticker(users, public)(make_command())
 
   assert_that(result.changed, is_(True))
-  assert_that(public.pack.stickers, equal_to({"wave": ["sticker-1"]}))
+  assert_that(public.get().some.id, equal_to(SF_PUBLIC))
+  assert_that(public.get().some.stickers, equal_to({"wave": ["sticker-1"]}))
   assert_that(users.saved_users, equal_to([]))
-  assert_that(caplog.messages, equal_to(["Sticker added to public-pack pack with tags: wave"]))
+  assert_that(
+    caplog.messages,
+    equal_to([f"Sticker added to {SF_PUBLIC} pack with tags: wave"]),
+  )
 
 
 def test_add_sticker_writes_to_private_pack_when_private_mode_is_enabled() -> None:
@@ -50,8 +61,8 @@ def test_add_sticker_writes_to_private_pack_when_private_mode_is_enabled() -> No
 
   AddSticker(users, public)(make_command(tags=("private",)))
 
-  assert_that(user.stickers, equal_to({"private": ["sticker-1"]}))
-  assert_that(public.pack.stickers, equal_to({}))
+  assert_that(users.get_user(UserId(1)).some.stickers, equal_to({"private": ["sticker-1"]}))
+  assert_that(public.get(), is_(Nothing))
 
 
 def test_add_sticker_falls_back_to_emoji_when_tags_are_absent() -> None:
@@ -61,7 +72,7 @@ def test_add_sticker_falls_back_to_emoji_when_tags_are_absent() -> None:
   result = AddSticker(users, public)(make_command(tags=()))
 
   assert_that(result.effective_tags, equal_to(("smile",)))
-  assert_that(public.pack.stickers, equal_to({"smile": ["sticker-1"]}))
+  assert_that(public.get().some.stickers, equal_to({"smile": ["sticker-1"]}))
 
 
 def test_add_sticker_with_no_tags_and_no_emoji_keeps_noop_success() -> None:
@@ -72,7 +83,7 @@ def test_add_sticker_with_no_tags_and_no_emoji_keeps_noop_success() -> None:
 
   assert_that(result.changed, is_(False))
   assert_that(result.effective_tags, equal_to(()))
-  assert_that(public.pack.stickers, equal_to({}))
+  assert_that(public.get(), is_(Nothing))
   assert_that(public.saved_packs, equal_to([]))
 
 
@@ -99,6 +110,7 @@ def test_get_stickers_falls_back_to_public_pack_for_missing_user() -> None:
   public = InMemoryPublicPackRepository()
   public_pack = public.ensure()
   public_pack.add_sticker("public", ["wave"])
+  public.save(public_pack)
 
   result = GetStickers(users, public)(
     GetStickersQuery(UserId(1), InteractionScope.PRIVATE, ("wave",))
@@ -107,11 +119,27 @@ def test_get_stickers_falls_back_to_public_pack_for_missing_user() -> None:
   assert_that(result.sticker_ids, equal_to(("public",)))
 
 
+def test_get_stickers_does_not_persist_incidental_cache_mutations() -> None:
+  users = InMemoryUserRepository()
+  public = InMemoryPublicPackRepository()
+  public_pack = public.ensure()
+  public_pack.add_sticker("public", ["wave"])
+  public_pack.cache["wave"] = ["previous-cache"]
+  public.save(public_pack)
+  public.saved_packs.clear()
+
+  GetStickers(users, public)(GetStickersQuery(UserId(1), InteractionScope.PRIVATE, ("wave",)))
+
+  assert_that(public.get().some.cache, equal_to({"wave": ["previous-cache"]}))
+  assert_that(public.saved_packs, equal_to([]))
+
+
 def test_get_stickers_uses_private_user_pack_when_private_mode_is_enabled() -> None:
   users = InMemoryUserRepository()
   public = InMemoryPublicPackRepository()
   public_pack = public.ensure()
   public_pack.add_sticker("public", ["wave"])
+  public.save(public_pack)
   user = StickfixUser(UserId(1))
   user.private_mode = True
   user.add_sticker("private", ["wave"])
@@ -139,7 +167,7 @@ def test_delete_sticker_removes_from_public_pack_by_default(
     result = DeleteSticker(users, public)(DeleteStickerCommand(UserId(1), "sticker-1", ("wave",)))
 
   assert_that(result.changed, is_(True))
-  assert_that(public.pack.stickers, equal_to({}))
+  assert_that(public.get(), is_(Nothing))
   assert_that(
     caplog.messages,
     equal_to(["Removed sticker sticker-1 from tags wave"]),
@@ -149,7 +177,6 @@ def test_delete_sticker_removes_from_public_pack_by_default(
 def test_delete_sticker_removes_from_private_pack_when_private_mode_is_enabled() -> None:
   users = InMemoryUserRepository()
   public = InMemoryPublicPackRepository()
-  public.ensure()
   user = StickfixUser(UserId(1))
   user.private_mode = True
   user.add_sticker("sticker-1", ["wave"])
@@ -158,4 +185,4 @@ def test_delete_sticker_removes_from_private_pack_when_private_mode_is_enabled()
 
   DeleteSticker(users, public)(DeleteStickerCommand(UserId(1), "sticker-1", ("wave",)))
 
-  assert_that(user.stickers, equal_to({}))
+  assert_that(users.get_user(UserId(1)).some.stickers, equal_to({}))

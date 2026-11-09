@@ -1,6 +1,8 @@
-"""PostgreSQL repository contract tests.
+"""PostgreSQL adapter contracts, including behavior shared with application fakes.
 
-These tests are opt-in because they intentionally clear the explicitly supplied test database.
+The opt-in fixture truncates the database configured by
+``STICKFIX_TEST_DATABASE_URL`` before and after each test. Use only a disposable
+database; keep these integration checks outside application-package tests.
 """
 
 # The repository's test suite uses plain assertions for readable contract checks.
@@ -11,9 +13,10 @@ from __future__ import annotations
 import os
 
 import pytest
+from expression import Nothing
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from stickfix_domain import StickfixUser, UserId
+from stickfix_domain import SF_PUBLIC, StickfixUser, UserId
 
 from bot.infrastructure.migration.legacy_yaml import LegacyStoreRecord, LegacyUserRecord
 from bot.infrastructure.migration.logical_snapshot import snapshot_from_legacy
@@ -65,14 +68,12 @@ def test_user_and_public_pack_round_trip(postgres_repository) -> None:
   postgres_repository.save_user(user)
   postgres_repository.save(public)
 
-  loaded_user = postgres_repository.get_user(UserId(123))
-  loaded_public = postgres_repository.get()
-  assert loaded_user is not None
+  loaded_user = postgres_repository.get_user(UserId(123)).some
+  loaded_public = postgres_repository.get().some
   assert loaded_user.private_mode is True
   assert loaded_user.shuffle is True
   assert loaded_user.stickers == user.stickers
   assert loaded_user.cached_stickers == user.cached_stickers
-  assert loaded_public is not None
   assert loaded_public.stickers == public.stickers
   assert loaded_public.cached_stickers == public.cached_stickers
 
@@ -87,9 +88,77 @@ def test_failed_user_mutation_rolls_back(postgres_repository) -> None:
   with pytest.raises((TypeError, ValueError, IntegrityError)):
     postgres_repository.save_user(invalid)
 
-  loaded = postgres_repository.get_user(UserId(123))
-  assert loaded is not None
+  loaded = postgres_repository.get_user(UserId(123)).some
   assert loaded.stickers == {"wave": ["s1"]}
+
+
+def test_public_ensure_and_empty_saves_are_not_retrievable(postgres_repository) -> None:
+  assert postgres_repository.get() is Nothing
+  transient_pack = postgres_repository.ensure()
+  assert transient_pack.id == SF_PUBLIC
+  assert postgres_repository.get() is Nothing
+  postgres_repository.save(transient_pack)
+  assert postgres_repository.get() is Nothing
+
+
+def test_public_pack_reads_are_detached(postgres_repository) -> None:
+  public = StickfixUser(SF_PUBLIC)
+  public.stickers = {"wave": ["public-sticker"]}
+  public.cached_stickers = {"wave": ["cached-public-sticker"]}
+  postgres_repository.save(public)
+  loaded = postgres_repository.get().some
+  loaded.stickers["wave"].append("unsaved-public-sticker")
+  loaded.cached_stickers["wave"].clear()
+
+  unchanged = postgres_repository.get().some
+  assert unchanged.stickers == {"wave": ["public-sticker"]}
+  assert unchanged.cached_stickers == {"wave": ["cached-public-sticker"]}
+
+
+def test_clearing_public_associations_removes_retrievable_state(postgres_repository) -> None:
+  public = StickfixUser(SF_PUBLIC)
+  public.stickers = {"wave": ["public-sticker"]}
+  postgres_repository.save(public)
+  loaded = postgres_repository.get().some
+  loaded.stickers.clear()
+  postgres_repository.save(loaded)
+
+  assert postgres_repository.get() is Nothing
+
+
+def _saved_contract_user(repository: PostgresUserRepository) -> None:
+  user = StickfixUser(UserId(123))
+  user.stickers = {"wave": ["s1"]}
+  user.cached_stickers = {"wave": ["c1"]}
+  repository.save_user(user)
+
+
+def test_regular_user_reads_are_detached(postgres_repository) -> None:
+  _saved_contract_user(postgres_repository)
+  loaded = postgres_repository.get_user(UserId(123)).some
+  loaded.stickers["wave"].append("unsaved")
+  loaded.cached_stickers["wave"].clear()
+
+  unchanged = postgres_repository.get_user(UserId(123)).some
+  assert unchanged.stickers == {"wave": ["s1"]}
+  assert unchanged.cached_stickers == {"wave": ["c1"]}
+
+
+def test_regular_user_update_and_delete_contract(postgres_repository) -> None:
+  _saved_contract_user(postgres_repository)
+  user = postgres_repository.get_user(UserId(123)).some
+  user.private_mode = True
+  user.stickers["wave"].append("s2")
+  postgres_repository.save_user(user)
+
+  saved = postgres_repository.get_user(UserId(123)).some
+  assert saved.private_mode is True
+  assert saved.stickers == {"wave": ["s1", "s2"]}
+
+  assert postgres_repository.delete_user(UserId(123)) is True
+  assert postgres_repository.get_user(UserId(123)) is Nothing
+  assert postgres_repository.has_user(UserId(123)) is False
+  assert postgres_repository.delete_user(UserId(123)) is False
 
 
 def test_runtime_repository_does_not_expose_migration_operations() -> None:

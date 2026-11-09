@@ -15,14 +15,15 @@ class GetStickers(StickerPackUseCase):
   ``/get`` is private-chat only: a non-private ``interaction_scope`` raises
   :class:`WrongInteractionContextError` and the handler turns that into a user
   message. This use case never mutates state -- it only reads the effective
-  pack -- so, unlike the add/delete cases, it performs no save.
+  pack -- so, unlike the add/delete cases, it performs no save. A public-port
+  `Nothing` is treated as an absent pack while resolving the caller's fallback.
   """
 
   def __call__(self, query: GetStickersQuery) -> GetStickersResult:
     if query.interaction_scope is not InteractionScope.PRIVATE:
       raise WrongInteractionContextError("The /get command only works in private chats.")
 
-    public_pack = self._public.get()
+    public_pack = self._public.get().default_value(None)
     user = resolve_effective_user(self._users, query.user_id, public_pack)
 
     sticker_ids = self._stickers.find_stickers(user, query.tags, public_pack)

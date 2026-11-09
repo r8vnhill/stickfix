@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14, <4"
 
 [manifest]
@@ -134,6 +134,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/fd/3f939c2847f4a72c20cff8b1ac33da78ea91a2d38d9b43336e60db719103/coverage-7.16.2-cp315-cp315t-win_amd64.whl", hash = "sha256:2aca0bdfa9e91621d5b09d815357bf63def4fc0e9cb66da67bf2cf93f3b1a6f5", size = 227374, upload-time = "2026-09-27T12:28:55.158Z" },
     { url = "https://files.pythonhosted.org/packages/5a/35/b98cdc354c952402132e675a87f2cc3227fb68f959c84aaa491fbe15933d/coverage-7.16.2-cp315-cp315t-win_arm64.whl", hash = "sha256:b88841e654f09732804809e435b3e005a929ffd9998b872b7b213957b8759cb8", size = 227064, upload-time = "2026-09-27T12:28:57.075Z" },
     { url = "https://files.pythonhosted.org/packages/3f/0c/7a64e1ac90541a8edf50daef0914848011fb057a5bf55284a4811e21939a/coverage-7.16.2-py3-none-any.whl", hash = "sha256:11d28e9123a9156cb405d8d27b44256c9a58fb5decc2073a8f17862057e3aa0f", size = 215754, upload-time = "2026-09-27T12:28:59.075Z" },
+]
+
+[[package]]
+name = "expression"
+version = "5.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/69/b8/1e095b6087866442a649fdf2d9e1aaf14f5d394f84f38e01d9831b3f1545/expression-5.8.0.tar.gz", hash = "sha256:2286e4ff71802420a69b235fa78fffdd21f404958524c1cb95133419f7f64e5f", size = 216402, upload-time = "2026-10-29T19:32:40.353Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/97/9af44300edc15ae9959a7e5c440de8cd495eeead52f03c0e56f04e409422/expression-5.8.0-py3-none-any.whl", hash = "sha256:3420f0ed06e2282f1f030ab8eefb70f06ed62365cd1988ad3b7c6525db9df179", size = 80621, upload-time = "2026-10-29T19:32:38.929Z" },
 ]
 
 [[package]]
@@ -599,11 +611,15 @@ name = "stickfix-application"
 version = "0.1.0"
 source = { editable = "packages/stickfix-application" }
 dependencies = [
+    { name = "expression" },
     { name = "stickfix-domain" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "stickfix-domain", editable = "packages/stickfix-domain" }]
+requires-dist = [
+    { name = "expression", specifier = ">=5.8,<6" },
+    { name = "stickfix-domain", editable = "packages/stickfix-domain" },
+]
 
 [[package]]
 name = "stickfix-bot"
@@ -611,6 +627,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "expression" },
     { name = "psycopg", extra = ["binary"] },
     { name = "python-telegram-bot" },
     { name = "pyyaml" },
@@ -643,6 +660,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.19.1,<2" },
+    { name = "expression", specifier = ">=5.8,<6" },
     { name = "neo4j", marker = "extra == 'graph'", specifier = ">=6.0,<7.0" },
     { name = "pgvector", marker = "extra == 'db'", specifier = ">=0.4.1,<0.5" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },

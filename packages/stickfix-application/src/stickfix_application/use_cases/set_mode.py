@@ -11,16 +11,14 @@ from ..results import AcknowledgementResult
 
 
 class SetMode:
-  """Change one user's storage mode."""
+  """Change one user's mode, creating a regular aggregate when the port returns `Nothing`."""
 
   def __init__(self, users: UserRepository) -> None:
     self._users = users
 
   def __call__(self, command: SetModeCommand) -> AcknowledgementResult:
     mode = self._validated_mode(command.mode)
-    user = self._users.get_user(command.user_id)
-    if user is None:
-      user = StickfixUser(command.user_id)
+    user = self._users.get_user(command.user_id).default_with(lambda: StickfixUser(command.user_id))
     user.private_mode = mode == UserModes.PRIVATE
     self._users.save_user(user)
     return AcknowledgementResult()

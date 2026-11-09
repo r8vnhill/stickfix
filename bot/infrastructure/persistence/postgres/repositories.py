@@ -3,7 +3,8 @@
 ``PostgresUserRepository`` implements both :class:`UserRepository` (regular numeric
 users) and :class:`PublicPackRepository` (the shared pack). Every mutating method
 runs inside ``session.begin()``, so once a call returns the change is already
-committed -- there is no periodic flush and no in-memory write-behind.
+committed -- there is no periodic flush and no in-memory write-behind. Optional
+repository reads use Expression ``Option`` to match the application port contracts.
 
 Association storage is normalised into ``tags`` plus four ordered join tables
 (user/public x sticker/cache). Reads and writes for all four go through the two
@@ -17,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 
+from expression import Nothing, Option, Some
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from stickfix_application.ports import PublicPackRepository, UserRepository
@@ -45,15 +47,17 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
 
   # -- UserRepository reads ------------------------------------------------
 
-  def get_user(self, user_id: UserId) -> StickfixUser | None:
+  def get_user(self, user_id: UserId) -> Option[StickfixUser]:
     with self._session_factory() as session:
       row = session.get(UserRow, int(user_id))
       if row is None:
-        return None
-      return user_from_rows(
-        row,
-        self._load_associations(session, UserStickerTagRow, user_id=int(user_id)),
-        self._load_associations(session, UserCachedStickerRow, user_id=int(user_id)),
+        return Nothing
+      return Some(
+        user_from_rows(
+          row,
+          self._load_associations(session, UserStickerTagRow, user_id=int(user_id)),
+          self._load_associations(session, UserCachedStickerRow, user_id=int(user_id)),
+        )
       )
 
   def has_user(self, user_id: UserId) -> bool:
@@ -83,13 +87,13 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
 
   # -- PublicPackRepository --------------------------------------------
 
-  def get(self) -> StickfixUser | None:
+  def get(self) -> Option[StickfixUser]:
     with self._session_factory() as session:
       stickers = self._load_associations(session, PublicStickerTagRow)
       cache = self._load_associations(session, PublicCachedStickerRow)
       if not stickers and not cache:
-        return None
-      return public_pack_from_rows(stickers, cache)
+        return Nothing
+      return Some(public_pack_from_rows(stickers, cache))
 
   def save(self, pack: StickfixUser) -> None:
     with self._session_factory() as session, session.begin():
@@ -98,7 +102,7 @@ class PostgresUserRepository(UserRepository, PublicPackRepository):
       self._write_public_pack(session, pack)
 
   def ensure(self) -> StickfixUser:
-    return self.get() or StickfixUser(SF_PUBLIC)
+    return self.get().default_with(lambda: StickfixUser(SF_PUBLIC))
 
   # -- shared write helpers -------------------------------------------
 

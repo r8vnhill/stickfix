@@ -3,7 +3,7 @@
 This port abstracts storage of regular Stickfix users, enabling:
 - Use cases to persist user state (sticker packs, mode, cache) without importing
   Telegram or knowing about YAML/database internals
-- Tests to provide in-memory fakes with full user mutability
+- Implementations to return detached aggregates and persist changes explicitly
 - Alternative storage backends (e.g., database) by implementing this protocol
 
 The shared public pack has its own `PublicPackRepository` contract and is not represented
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from expression import Option
 from stickfix_domain import StickfixUser, UserId
 
 
@@ -21,14 +22,15 @@ from stickfix_domain import StickfixUser, UserId
 class UserRepository(Protocol):
   """Contract for reading and mutating regular Stickfix users."""
 
-  def get_user(self, user_id: UserId) -> StickfixUser | None:
-    """Return one user by id, or `None` when absent.
+  def get_user(self, user_id: UserId) -> Option[StickfixUser]:
+    """Return one user by id, or `Nothing` when absent.
 
     Args:
         user_id: Numeric Telegram user ID.
 
     Returns:
-        The user/pack if found, otherwise None.
+        `Some` containing a detached aggregate, or `Nothing`. Mutations to the
+        aggregate become persistent only after `save_user()` succeeds.
     """
 
   def has_user(self, user_id: UserId) -> bool:
@@ -45,7 +47,8 @@ class UserRepository(Protocol):
     """Persist one user in the repository.
 
     Updates an existing user or inserts a new one. All mutations (sticker packs,
-    mode, cache state) are saved immediately.
+    mode, cache state) are saved immediately. Implementations must not retain a
+    mutable reference to the supplied aggregate.
 
     Args:
         user: The user to save. Must have a valid user_id.

@@ -15,11 +15,13 @@ class ClearInlineCache(StickerPackUseCase):
   handler calls this to invalidate the per-owner cache so the next inline query
   is recomputed. The owner is the caller's private pack when they are in private
   mode, otherwise the shared public pack (see :func:`resolve_effective_user` and
-  ``StickerPackService.resolve_effective_pack``).
+  ``StickerPackService.resolve_effective_pack``). The public port returns an
+  Expression `Option`; this use case turns `Nothing` into the existing absent-pack
+  fallback before resolving the cache owner.
   """
 
   def __call__(self, command: ClearInlineCacheCommand) -> AcknowledgementResult:
-    public_pack = self._public.get()
+    public_pack = self._public.get().default_value(None)
     user = resolve_effective_user(self._users, command.user_id, public_pack)
     cache_owner = self._stickers.resolve_effective_pack(user, public_pack)
     cache_owner.remove_cached_stickers()

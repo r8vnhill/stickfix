@@ -10,12 +10,12 @@ from ..results import AcknowledgementResult
 
 
 class EnsureUser:
-  """Ensure that one numeric Telegram user has a persisted record."""
+  """Ensure one numeric user has a record; only port `Nothing` triggers a save."""
 
   def __init__(self, users: UserRepository) -> None:
     self._users = users
 
   def __call__(self, command: EnsureUserCommand) -> AcknowledgementResult:
-    if self._users.get_user(command.user_id) is None:
+    if self._users.get_user(command.user_id).is_none():
       self._users.save_user(StickfixUser(command.user_id))
     return AcknowledgementResult()

@@ -17,6 +17,7 @@ from typing import NoReturn
 
 import pytest
 from dependency_policy import (
+  APPLICATION_RUNTIME,
   DEV,
   EXTRA_GRAPH,
   OVERRIDE,
@@ -84,10 +85,17 @@ def fail(message: str) -> NoReturn:
 
 
 def declared_surfaces() -> list[tuple[str, str]]:
-  """Return every root declaration as (normalized name, surface), duplicates included."""
+  """Return declarations with their root or workspace-member surface, duplicates included."""
   metadata = project_metadata()
   project = metadata["project"]
   declared = [(name, RUNTIME) for name in map(_name, project["dependencies"])]
+  for member, surface in (("stickfix-application", APPLICATION_RUNTIME),):
+    member_project = distribution_metadata(member)["project"]
+    declared.extend(
+      (_name(requirement), surface)
+      for requirement in member_project["dependencies"]
+      if _name(requirement) not in WORKSPACE_GRAPH
+    )
   for extra, requirements in project["optional-dependencies"].items():
     declared.extend((_name(requirement), f"extra:{extra}") for requirement in requirements)
   declared.extend((_name(requirement), DEV) for requirement in metadata["dependency-groups"][DEV])
@@ -251,11 +259,14 @@ def test_compatibility_entries_cite_an_existing_verification_test(
 
 
 def declared_requirement(name: str, surface: str = RUNTIME) -> Requirement:
-  """Return the single parsed root requirement for one dependency on one surface."""
-  metadata = project_metadata()
-  if surface == OVERRIDE:
+  """Return the single parsed requirement for one dependency declaration surface."""
+  if surface == APPLICATION_RUNTIME:
+    requirements = distribution_metadata("stickfix-application")["project"]["dependencies"]
+  elif surface == OVERRIDE:
+    metadata = project_metadata()
     requirements = metadata["tool"]["uv"]["override-dependencies"]
   else:
+    metadata = project_metadata()
     requirements = metadata["project"]["dependencies"]
   matches = [
     parse_requirement(requirement)
@@ -293,10 +304,11 @@ def test_bounded_declarations_and_locks_match_their_approved_boundary(
 
 
 def test_compatibility_boundaries_cover_the_ptb_baseline() -> None:
-  """PTB and every compatibility pin carry an explicit version boundary."""
+  """PTB compatibility pins and other approved runtime bounds stay versioned."""
   bounded = {entry.name for entry in BOUNDED_ENTRIES}
 
-  assert names_in(DependencyClass.COMPATIBILITY) | {"python-telegram-bot"} == bounded
+  required = names_in(DependencyClass.COMPATIBILITY) | {"python-telegram-bot", "expression"}
+  assert required <= bounded
 
 
 def test_ptb_stays_on_the_approved_13_15_baseline() -> None:
@@ -306,6 +318,14 @@ def test_ptb_stays_on_the_approved_13_15_baseline() -> None:
   assert entry.boundary.specifier == ">=13.15,<14"
   assert locked_package_versions("python-telegram-bot") == ["13.15"]
   check_boundary(entry, release_tuple(version("python-telegram-bot")))
+
+
+def test_expression_stays_within_its_supported_5x_bound() -> None:
+  """Expression remains on the approved runtime line used by application ports."""
+  entry = policy_for("expression", APPLICATION_RUNTIME)
+
+  assert entry.boundary.specifier == ">=5.8,<6"
+  check_boundary(entry, release_tuple(version("expression")))
 
 
 def test_psycopg_is_loaded_through_the_sqlalchemy_dialect() -> None:

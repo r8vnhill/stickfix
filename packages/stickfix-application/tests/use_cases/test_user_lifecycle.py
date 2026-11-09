@@ -1,3 +1,5 @@
+"""User lifecycle use cases through the transport-neutral repository port."""
+
 from __future__ import annotations
 
 import pytest
@@ -15,7 +17,7 @@ def test_ensure_user_creates_unknown_numeric_user_once() -> None:
   EnsureUser(users)(EnsureUserCommand(UserId(1)))
   EnsureUser(users)(EnsureUserCommand(UserId(1)))
 
-  assert_that(users.users.keys(), equal_to({UserId(1)}))
+  assert_that(users.has_user(UserId(1)), is_(True))
   assert_that(users.saved_users, has_length(1))
 
 
@@ -29,7 +31,8 @@ def test_ensure_user_preserves_existing_user_state() -> None:
 
   EnsureUser(users)(EnsureUserCommand(UserId(1)))
 
-  assert_that(users.get_user(UserId(1)), is_(user))
+  loaded = users.get_user(UserId(1)).some
+  assert_that((loaded.private_mode, loaded.shuffle), equal_to((True, True)))
   assert_that(users.saved_users, equal_to([]))
 
 
@@ -42,7 +45,7 @@ def test_set_shuffle_persists_supported_values(value: str, expected: bool) -> No
 
   SetShuffle(users)(SetShuffleCommand(UserId(1), value))
 
-  assert_that(users.get_user(UserId(1)).shuffle, is_(expected))
+  assert_that(users.get_user(UserId(1)).some.shuffle, is_(expected))
 
 
 def test_set_shuffle_rejects_unsupported_value_without_mutation() -> None:
@@ -51,7 +54,7 @@ def test_set_shuffle_rejects_unsupported_value_without_mutation() -> None:
   with pytest.raises(InvalidCommandInputError):
     SetShuffle(users)(SetShuffleCommand(UserId(1), "sometimes"))
 
-  assert_that(users.users, equal_to({}))
+  assert_that(users.has_user(UserId(1)), is_(False))
   assert_that(users.saved_users, equal_to([]))
 
 
@@ -62,7 +65,7 @@ def test_delete_user_removes_existing_user_and_acknowledges() -> None:
   result = DeleteUser(users)(DeleteUserCommand(UserId(1)))
 
   assert_that(result.acknowledged, is_(True))
-  assert_that(users.users, equal_to({}))
+  assert_that(users.has_user(UserId(1)), is_(False))
 
 
 def test_delete_user_missing_user_is_a_no_op() -> None:

@@ -32,7 +32,7 @@ from package_contract_support import (
 # Third-party runtime requirements each member publishes; internal edges come from the graph.
 MEMBER_THIRD_PARTY: dict[str, frozenset[str]] = {
   "stickfix-domain": frozenset(),
-  "stickfix-application": frozenset(),
+  "stickfix-application": frozenset({"expression"}),
   "stickfix-telegram": frozenset({"python-telegram-bot"}),
 }
 

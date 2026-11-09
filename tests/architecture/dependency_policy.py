@@ -13,6 +13,7 @@ from enum import StrEnum
 
 POLICY_TESTS = "tests/architecture/test_dependency_policy.py"
 RUNTIME = "runtime"
+APPLICATION_RUNTIME = "runtime:stickfix-application"
 DEV = "dev"
 OVERRIDE = "override"
 EXTRA_DB = "extra:db"
@@ -97,6 +98,16 @@ def build_order() -> tuple[str, ...]:
 
 POLICY: tuple[DependencyPolicy, ...] = (
   DependencyPolicy(
+    "expression",
+    DependencyClass.RUNTIME,
+    RUNTIME,
+    "Explicit optional values in the PostgreSQL adapter.",
+    ImportMode.DIRECT,
+    ("expression",),
+    _verified_by("test_expression_stays_within_its_supported_5x_bound"),
+    VersionBoundary((5, 8), (6,), ">=5.8,<6"),
+  ),
+  DependencyPolicy(
     "stickfix-domain",
     DependencyClass.INTERNAL,
     RUNTIME,
@@ -119,6 +130,16 @@ POLICY: tuple[DependencyPolicy, ...] = (
     "Telegram adapters; currently identity mapping only.",
     ImportMode.DIRECT,
     ("stickfix_telegram",),
+  ),
+  DependencyPolicy(
+    "expression",
+    DependencyClass.RUNTIME,
+    APPLICATION_RUNTIME,
+    "Explicit optional values at application repository boundaries.",
+    ImportMode.DIRECT,
+    ("expression",),
+    _verified_by("test_expression_stays_within_its_supported_5x_bound"),
+    VersionBoundary((5, 8), (6,), ">=5.8,<6"),
   ),
   DependencyPolicy(
     "python-telegram-bot",

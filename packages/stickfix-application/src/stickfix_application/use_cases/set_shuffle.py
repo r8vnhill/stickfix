@@ -11,7 +11,7 @@ from ..results import AcknowledgementResult
 
 
 class SetShuffle:
-  """Create or update a user's shuffle preference."""
+  """Create or update shuffle state, defaulting to a new user on `Nothing`."""
 
   def __init__(self, users: UserRepository) -> None:
     self._users = users
@@ -22,7 +22,7 @@ class SetShuffle:
     except ValueError as error:
       raise InvalidCommandInputError(f"{command.shuffle} is not a valid switch.") from error
 
-    user = self._users.get_user(command.user_id) or StickfixUser(command.user_id)
+    user = self._users.get_user(command.user_id).default_with(lambda: StickfixUser(command.user_id))
     user.shuffle = switch is Switch.ON
     self._users.save_user(user)
     return AcknowledgementResult()

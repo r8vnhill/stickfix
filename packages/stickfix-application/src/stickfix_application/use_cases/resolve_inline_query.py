@@ -19,7 +19,8 @@ class ResolveInlineQuery(StickerPackUseCase):
   default tag and the help text so the client can show a "how to use me"
   article; every other query just paginates the matched stickers. The effective
   pack is saved on each call because :class:`StickerPackService` may reshuffle
-  or refresh its cache as a side effect of the lookup.
+  or refresh its cache as a side effect of the lookup. Public-port `Nothing` is
+  converted to the existing absent-pack state before user fallback resolution.
   """
 
   def __init__(
@@ -33,7 +34,7 @@ class ResolveInlineQuery(StickerPackUseCase):
     self._help_content = help_content
 
   def __call__(self, request: InlineQueryRequest) -> InlineQueryResult:
-    public_pack = self._public.get()
+    public_pack = self._public.get().default_value(None)
     user = resolve_effective_user(self._users, request.user_id, public_pack)
     tags = tuple(request.query_text.split(" "))
     sticker_ids = self._stickers.find_stickers(user, tags, public_pack)

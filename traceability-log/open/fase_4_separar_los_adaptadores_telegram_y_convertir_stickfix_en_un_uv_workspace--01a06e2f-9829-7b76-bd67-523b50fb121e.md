@@ -28,14 +28,16 @@ The milestone deliberately breaks the `bot.*` import namespace. No compatibility
 stickfix-bot
     ├──> stickfix-telegram
     ├──> stickfix-application
-    └──> stickfix-domain
+    ├──> stickfix-domain
+    └──> expression
 
 stickfix-telegram
     ├──> stickfix-application
     └──> stickfix-domain
 
 stickfix-application
-    └──> stickfix-domain
+    ├──> stickfix-domain
+    └──> expression
 
 stickfix-domain
     └──> stdlib only

@@ -24,7 +24,8 @@ class AddSticker(StickerPackUseCase):
   otherwise the sticker's own emoji becomes the single tag, otherwise the
   sticker is added untagged. The effective pack is persisted only when there is
   at least one tag to link, matching :class:`StickerPackService` semantics. A
-  successful tagged write also emits an operational INFO record.
+  successful tagged write also emits an operational INFO record. A missing
+  regular user is an `Option` absence and uses the transient ensured public pack.
   """
 
   def __call__(self, command: AddStickerCommand) -> AddStickerResult:
@@ -32,7 +33,7 @@ class AddSticker(StickerPackUseCase):
       raise MissingStickerError("A sticker id is required to add a sticker.")
 
     public_pack = self._public.ensure()
-    user = self._users.get_user(command.user_id) or public_pack
+    user = self._users.get_user(command.user_id).default_value(public_pack)
     tags = self._effective_tags(command)
     mutation = self._stickers.add_sticker(user, command.reply_sticker_id, tags, public_pack)
     if tags:

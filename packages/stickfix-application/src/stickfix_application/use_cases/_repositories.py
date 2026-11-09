@@ -4,12 +4,15 @@ The use cases operate on an "effective pack" that is either the caller's own
 record or the shared ``SF-PUBLIC`` pack. These helpers centralise the two places
 that distinction matters -- persisting a mutated pack back to the right port, and
 resolving which pack a request targets -- so each use case stays a few lines long
-and they cannot drift apart. Everything here is Telegram-free and depends only on
-application ports, application errors, and the domain model.
+and they cannot drift apart. Repository absence stays an Expression `Option` until
+this module applies a use-case fallback or raises the established domain-facing
+error. This module remains Telegram-free and depends on application ports, errors,
+and the domain model.
 """
 
 from __future__ import annotations
 
+from expression import Nothing, Option
 from stickfix_domain import StickfixUser, UserId
 
 from ..errors import UserNotFoundError
@@ -36,8 +39,8 @@ def save_effective_pack(
     users.save_user(pack)
 
 
-def get_user(users: UserRepository, user_id: UserId) -> StickfixUser | None:
-  """Load one regular numeric user through the explicit user port."""
+def get_user(users: UserRepository, user_id: UserId) -> Option[StickfixUser]:
+  """Load a regular user while preserving the port's explicit absence value."""
   return users.get_user(user_id)
 
 
@@ -57,9 +60,11 @@ def resolve_effective_user(
   Raises:
       UserNotFoundError: Neither a matching user nor a public pack is available.
   """
-  user = get_user(users, user_id) if user_id is not None else None
-  if user is not None:
-    return user
+  user = get_user(users, user_id) if user_id is not None else Nothing
+  return user.default_with(lambda: _public_pack_or_raise(public_pack))
+
+
+def _public_pack_or_raise(public_pack: StickfixUser | None) -> StickfixUser:
   if public_pack is None:
     raise UserNotFoundError(_NO_TARGET_MESSAGE)
   return public_pack

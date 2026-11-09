@@ -38,7 +38,7 @@ PRODUCTION_BOUNDARIES = (BOT, *map(member_boundary, WORKSPACE_MEMBERS))
 # Besides the standard library, each member may import exactly these roots (itself included).
 MEMBER_ALLOWED_IMPORTS: dict[str, tuple[str, ...]] = {
   "stickfix-domain": ("stickfix_domain",),
-  "stickfix-application": ("stickfix_application", "stickfix_domain"),
+  "stickfix-application": ("stickfix_application", "stickfix_domain", "expression"),
   # Milestone 4.5 target edges: runtime composition and infrastructure stay out of the adapters.
   "stickfix-telegram": (
     "stickfix_telegram",

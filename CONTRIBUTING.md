@@ -72,8 +72,14 @@ The current workspace comprises four independently built distributions:
 |---|---|---|
 | `stickfix-bot` (root) | `bot` | Telegram, application, domain, third-party |
 | `packages/stickfix-telegram` | `stickfix_telegram` | `stickfix-domain`, PTB 13 |
-| `packages/stickfix-application` | `stickfix_application` | `stickfix-domain` |
+| `packages/stickfix-application` | `stickfix_application` | `stickfix-domain`, Expression |
 | `packages/stickfix-domain` | `stickfix_domain` | standard library |
+
+The application repository ports use Expression `Option[StickfixUser]` to make absence explicit:
+`Some` carries a detached aggregate and `Nothing` means no row or no public associations. Use
+cases choose a fallback or raise their existing error before passing ordinary aggregates to the
+domain service. Keep Expression imports in the application and adapter layers; the domain stays
+independent of both.
 
 The root distribution also packages the standalone `imghdr.py` compatibility module. Python 3.14
 no longer includes `imghdr`, but PTB 13 imports it. `bot.handlers` is currently an implicit
@@ -256,6 +262,8 @@ When you add, remove, or move a dependency, update the policy and this table in 
 |---|---|---|---|
 | `stickfix-domain` | internal | `runtime` | Telegram-free user and sticker rules. |
 | `stickfix-application` | internal | `runtime` | Transport-agnostic use cases, ports, and DTOs. |
+| `expression` | runtime | `runtime` | Explicit optional values in the PostgreSQL adapter. |
+| `expression` | runtime | `runtime:stickfix-application` | Explicit optional values at application repository boundaries. |
 | `stickfix-telegram` | internal | `runtime` | Telegram adapters; currently identity mapping only. |
 | `python-telegram-bot` | runtime | `runtime` | PTB 13.15 synchronous Telegram framework. |
 | `pyyaml` | runtime | `runtime` | Historical YAML import for one-shot PostgreSQL migration. |
@@ -275,7 +283,8 @@ When you add, remove, or move a dependency, update the policy and this table in 
 | `ruff` | development | `dev` | Linting and formatting. |
 
 Classifications describe why a dependency exists; the declaration surface says where
-`pyproject.toml` declares it (`runtime`, `dev`, `extra:<name>`, or the `[tool.uv]` `override`).
+`pyproject.toml` declares it (`runtime`, `runtime:<distribution>`, `dev`, `extra:<name>`, or
+the `[tool.uv]` `override`).
 Compatibility entries are legacy PTB 13 constraints with an approved version boundary and a
 verification test. The Tornado override is replaced only during an approved PTB migration that
 demonstrates equivalent behavior and no dependency-security regression.
