@@ -101,6 +101,27 @@ def test_public_ensure_and_empty_saves_are_not_retrievable(postgres_repository) 
   assert postgres_repository.get() is Nothing
 
 
+def test_empty_tag_lists_do_not_produce_retrievable_associations(postgres_repository) -> None:
+  """Empty tag values produce no association rows even beside stored tags."""
+  user = StickfixUser(UserId(123))
+  user.stickers = {"unused": [], "wave": ["s1"]}
+  user.cached_stickers = {"unused-cache": []}
+  postgres_repository.save_user(user)
+
+  regular = postgres_repository.get_user(UserId(123)).some
+  assert regular.stickers == {"wave": ["s1"]}
+  assert regular.cached_stickers == {}
+
+  public = StickfixUser(SF_PUBLIC)
+  public.stickers = {"unused": [], "wave": ["s2"]}
+  public.cached_stickers = {"unused-cache": []}
+  postgres_repository.save(public)
+
+  loaded = postgres_repository.get().some
+  assert loaded.stickers == {"wave": ["s2"]}
+  assert loaded.cached_stickers == {}
+
+
 def test_public_pack_reads_are_detached(postgres_repository) -> None:
   public = StickfixUser(SF_PUBLIC)
   public.stickers = {"wave": ["public-sticker"]}

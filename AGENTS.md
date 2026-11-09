@@ -92,3 +92,19 @@
   compatibility contracts; retain their verification until an approved PTB migration.
 - The existing Docker Compose topology uses PostgreSQL, a one-shot Alembic migration service,
   and a Telegram polling bot. Preserve the current commands until the planned milestone changes.
+
+## Application repository fakes and agent guidance
+
+- In `stickfix-application`, `UserRepository.get_user()` and `PublicPackRepository.get()`
+  return Expression `Option[StickfixUser]`. `Nothing` represents absence; `Some` wraps a
+  detached aggregate. Domain services do not depend on Expression.
+- Use explicit saves when arranging repository-backed tests. `ensure()` creates an unsaved
+  public pack when absent; empty public association state remains absent after a save.
+- Keep `tests/support/repositories.py` free of SQLAlchemy and runtime infrastructure. Its
+  detached snapshots model the persistence boundary, not an SQL or transaction engine.
+- Preserve within-tag sticker order, discard empty association lists on storage reads, and
+  reject unsupported/duplicate sticker IDs before fake state changes.
+- Consult `packages/stickfix-application/AGENTS.md`, its `README.md`, and
+  `tests/support/README.md` before changing the application repository seam.
+- When the fake and PostgreSQL appear inconsistent, add focused characterization tests in
+  their respective suites; do not silently change the public ports or runtime behavior.

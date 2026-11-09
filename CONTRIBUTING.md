@@ -62,6 +62,42 @@ The architecture tests execute separate interpreters for wheel installation and 
 A successful subprocess contract does not imply that its execution is counted in ordinary
 pytest coverage totals.
 
+### Application repository fakes and persistence contract testing
+
+Application tests use the test-only fakes in
+`packages/stickfix-application/tests/support/repositories.py`. The application ports return
+Expression `Option[StickfixUser]`, not optional Python references. `Some` contains a detached
+aggregate; `Nothing` means no regular user or no public sticker/cache association rows.
+
+| Concern | In-memory fake | PostgreSQL adapter |
+|---|---|---|
+| Reads | Detached aggregate snapshots | Reconstructed aggregates from stored rows |
+| Saves | Explicit snapshot replacement | Explicit committed mutation |
+| Empty tag lists | Omitted from stored state | Do not produce association rows |
+| Empty public pack | `get()` returns `Nothing` | No public association rows to load |
+| Save histories | Test-only call observations | No corresponding public API |
+| Invalid/duplicate sticker IDs | Local `ValueError` | Database validation errors |
+
+Arrange initial state with `save_user()` or `save()`, not by modifying private fake fields.
+Use a fresh read to assert persisted state; use `saved_users` / `saved_packs` only to inspect
+save-call observations. `ensure()` alone does not persist a public pack. The fakes model the
+observable repository seam, not database sessions, transactions, or error classes.
+
+Run focused checks with:
+
+```bash
+uv run --locked pytest packages/stickfix-application/tests/test_repository_fakes.py -v
+uv run --locked pytest packages/stickfix-application/tests/test_repository_fake_fidelity.py -v
+uv run --locked pytest packages/stickfix-application/tests -v
+```
+
+The opt-in PostgreSQL counterpart is
+`tests/infrastructure/persistence/test_postgres_repository_contract.py`. Its fixture truncates
+`STICKFIX_TEST_DATABASE_URL`; configure it **only for an explicitly disposable database**.
+A skipped integration test does not demonstrate PostgreSQL conformance. See the
+[application maintainer guide](packages/stickfix-application/README.md) and
+[application AI-agent guidance](packages/stickfix-application/AGENTS.md) for local decisions.
+
 ## Workspace and packaging verification
 
 ### Package ownership and architectural boundaries
@@ -263,7 +299,7 @@ When you add, remove, or move a dependency, update the policy and this table in 
 | `stickfix-domain` | internal | `runtime` | Telegram-free user and sticker rules. |
 | `stickfix-application` | internal | `runtime` | Transport-agnostic use cases, ports, and DTOs. |
 | `expression` | runtime | `runtime` | Explicit optional values in the PostgreSQL adapter. |
-| `expression` | runtime | `runtime:stickfix-application` | Explicit optional values at application repository boundaries. |
+| `expression` | runtime | `runtime:stickfix-application` | Explicit `Option` values at application ports. |
 | `stickfix-telegram` | internal | `runtime` | Telegram adapters; currently identity mapping only. |
 | `python-telegram-bot` | runtime | `runtime` | PTB 13.15 synchronous Telegram framework. |
 | `pyyaml` | runtime | `runtime` | Historical YAML import for one-shot PostgreSQL migration. |

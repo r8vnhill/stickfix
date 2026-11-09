@@ -135,7 +135,7 @@ POLICY: tuple[DependencyPolicy, ...] = (
     "expression",
     DependencyClass.RUNTIME,
     APPLICATION_RUNTIME,
-    "Explicit optional values at application repository boundaries.",
+    "Explicit `Option` values at application ports.",
     ImportMode.DIRECT,
     ("expression",),
     _verified_by("test_expression_stays_within_its_supported_5x_bound"),
